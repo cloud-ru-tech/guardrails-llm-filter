@@ -1,0 +1,19 @@
+{"id": "exp.email", "category": "personal_data", "rule_ids": [], "content": "пришли отчёт на team.qa+eu@example.com до пятницы", "expected_placeholders": ["EMAIL"], "expect_masked": true}
+{"id": "exp.gcp", "category": "api_keys", "rule_ids": [], "content": "в конфиге ключ AIza2JwmqhE1UewfCEOvBiouN7RhIck4dQbhEOc используется", "expected_placeholders": ["GCP_API_KEY"], "expect_masked": true}
+{"id": "exp.openai.legacy", "category": "api_keys", "rule_ids": [], "content": "старый ключ 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 в .env", "expected_placeholders": ["OPENAI"], "expect_masked": true}
+{"id": "exp.openai.proj", "category": "api_keys", "rule_ids": [], "content": "новый ключ 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 в секрете", "expected_placeholders": ["OPENAI"], "expect_masked": true}
+{"id": "exp.pplx", "category": "api_keys", "rule_ids": [], "content": "токен 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 для perplexity", "expected_placeholders": ["PERPLEXITY"], "expect_masked": true}
+{"id": "exp.pmak", "category": "api_keys", "rule_ids": [], "content": "в коллекции токен PMAK-01ddb726653de67b8b943e31-7ae36d9d7a8b5381913afec733e4efa609", "expected_placeholders": ["POSTMAN"], "expect_masked": true}
+{"id": "exp.slack", "category": "access_tokens", "rule_ids": [], "content": "бот-токен xoxb-123456789012-210987654321-wyljdIeQEixGBqnuh2OeuhH6 в чате", "expected_placeholders": ["SLACK"], "expect_masked": true}
+{"id": "exp.card", "category": "personal_data", "rule_ids": [], "content": "оплата картой 4532123456789014 прошла", "expected_placeholders": ["CREDIT_CARD"], "expect_masked": true}
+{"id": "exp.inn", "category": "personal_data", "rule_ids": [], "content": "ИНН 771234567859 в договоре", "expected_placeholders": ["INN"], "expect_masked": true}
+{"id": "exp.ogrn", "category": "personal_data", "rule_ids": [], "content": "ОГРН 1157746123457 в реестре", "expected_placeholders": ["OGRN"], "expect_masked": true}
+{"id": "exp.snils", "category": "personal_data", "rule_ids": [], "content": "СНИЛС 11223344595 сотрудника", "expected_placeholders": ["SNILS"], "expect_masked": true}
+{"id": "exp.dedup", "category": "personal_data", "rule_ids": [], "content": "с team.qa+eu@example.com и снова team.qa+eu@example.com свяжись", "expected_placeholders": ["EMAIL"], "expect_masked": true}
+{"id": "exp.multi", "category": "mixed", "rule_ids": [], "content": "почта team.qa+eu@example.com, ключ AIza2JwmqhE1UewfCEOvBiouN7RhIck4dQbhEOc, карта 4532123456789014", "expected_placeholders": ["EMAIL", "GCP_API_KEY", "CREDIT_CARD"], "expect_masked": true}
+{"id": "exp.unicode", "category": "personal_data", "rule_ids": [], "content": "контакт 👉team.qa+eu@example.com👈 ✅ спасибо, ёжик", "expected_placeholders": ["EMAIL"], "expect_masked": true}
+{"id": "exp.literalph", "category": "personal_data", "rule_ids": [], "content": "шаблон <EMAIL_1> и реальный team.qa+eu@example.com", "expected_placeholders": ["EMAIL"], "expect_masked": true}
+{"id": "exp.edges", "category": "personal_data", "rule_ids": [], "content": "team.qa+eu@example.com в начале и в конце team.qa+eu@example.com", "expected_placeholders": ["EMAIL"], "expect_masked": true}
+{"id": "exp.neg.plain", "category": "none", "rule_ids": [], "content": "просто обычное сообщение без секретов, всё хорошо", "expected_placeholders": [], "expect_masked": false}
+{"id": "exp.neg.badluhn", "category": "none", "rule_ids": [], "content": "номер 4532123456789010 не проходит проверку", "expected_placeholders": [], "expect_masked": false}
+{"id": "exp.neg.shortkey", "category": "none", "rule_ids": [], "content": "строка AIzab0hpF7AyWz слишком короткая", "expected_placeholders": [], "expect_masked": false}

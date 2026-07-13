@@ -1,0 +1,59 @@
+.drawer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--sys-neutral-background);
+  color: var(--sys-neutral-text-main);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--sys-neutral-decor-default);
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.testSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--sys-neutral-decor-default);
+}
+
+.testTitle {
+  color: var(--sys-neutral-text-support);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.testActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--sys-neutral-decor-default);
+}

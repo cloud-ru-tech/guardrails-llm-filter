@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a defect in guardrails-llm-filter
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do **not** include real secrets,
+        tokens, or personal data in this issue — redact them first.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, config, and a redacted request/response if relevant.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Release tag or git commit of guardrails-llm-filter.
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Store backend
+      options:
+        - in_memory
+        - redis
+        - postgres
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Go version, OS, Envoy version, deployment topology (single vs split request/response).
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redacted service logs. Never paste unmasked sensitive values.
+      render: text
+    validations:
+      required: false

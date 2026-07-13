@@ -1,0 +1,6 @@
+# Dev-only. Copy to .env.local for `npm run dev`.
+# The Vite dev proxy forwards /v1 to this config API. The config API is
+# unauthenticated, so no token is needed.
+
+# A reachable guardrails / extproc-guardrails config API (:9080).
+GUARDRAILS_API_URL=http://localhost:9080

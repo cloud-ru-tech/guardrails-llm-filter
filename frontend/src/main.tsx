@@ -1,0 +1,18 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
+
+import { App } from './app/App';
+import './styles/global.scss';
+import './styles/theme-overrides.scss';
+
+const root = document.getElementById('root');
+if (!root) throw new Error('#root element not found');
+
+createRoot(root).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

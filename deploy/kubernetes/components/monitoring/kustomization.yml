@@ -1,0 +1,14 @@
+# Opt-in monitoring for prometheus-operator setups (ServiceMonitor +
+# PrometheusRule CRDs must be installed). Use from an overlay:
+#
+#   apiVersion: kustomize.config.k8s.io/v1beta1
+#   kind: Kustomization
+#   resources:
+#     - ../../   # the guardrails-llm-filter base
+#   components:
+#     - ../../components/monitoring
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - servicemonitor.yml
+  - prometheusrule.yml

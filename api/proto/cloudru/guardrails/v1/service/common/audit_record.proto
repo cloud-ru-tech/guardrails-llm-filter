@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.common;
+
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/data_type.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/common;commonv1";
+
+// AuditReplacement is the audit-safe projection of a masking replacement. The
+// original value is present only when the operator opts in via
+// GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS (off by default); see original.
+message AuditReplacement {
+  string rule_id = 1;
+  DataType data_type = 2;
+  string placeholder = 3;
+  // original is the raw pre-masking value behind placeholder. Empty unless
+  // GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS is enabled; decrypted by the API
+  // before it is returned. SECURITY: raw sensitive data — access-control it.
+  string original = 4;
+}
+
+// AuditRecord is one per-request masking audit entry.
+message AuditRecord {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "Audit Record";
+      description: "One per-request masking audit entry. Original values are omitted unless GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS is enabled.";
+    };
+  };
+
+  string request_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string mode = 3;
+  string model = 4;
+  string path = 5;
+  repeated string triggered_rule_ids = 6;
+  repeated DataType triggered_data_types = 7;
+  repeated AuditReplacement replacements = 8;
+  repeated string masked_texts = 9;
+  // masked_response_texts holds the post-masking model response texts
+  // (placeholders substituted, originals absent) — the response counterpart of
+  // masked_texts. Populated only when GUARDRAILS_AUDIT_STORE_MASKED_RESPONSE_TEXTS
+  // is enabled.
+  repeated string masked_response_texts = 10;
+}

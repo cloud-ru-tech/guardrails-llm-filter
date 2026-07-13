@@ -1,0 +1,68 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans-body-m-font-family, system-ui, sans-serif);
+  // App canvas sits below the card/panel surfaces so they read as elevated.
+  background: var(--gr-canvas, var(--sys-neutral-background));
+  color: var(--sys-neutral-text-main);
+}
+
+// Theme token classes (.light / .dark + gr-theme) live on <body> so portalled
+// overlays inherit them; this just fills the viewport.
+.appShell {
+  min-height: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sys-primary-accent-default);
+  outline-offset: 2px;
+}
+
+// Label+icon buttons (ButtonFilled/Outline/Tonal) always render the icon *after*
+// the label — the DS omits `iconPosition` on them. We prefer the icon to *lead*
+// the label (↑ Import, + Create), the conventional action-button pattern, so we
+// flip the flex row. DOM order (label→icon) is unchanged, so the icon stays
+// decorative for screen readers.
+//
+// The DS also pairs this with asymmetric padding (wider on the label side, tight
+// on the icon side); once the row is flipped that leaves the label crowding the
+// trailing edge, so we equalise the horizontal padding to the wider label-side
+// value and the group reads balanced. Uses the *physical* longhands snack-uikit
+// itself sets (padding-left/right, not logical padding-inline) so the override
+// wins, and targets the stable data-variant / data-size DOM attributes; icon-only
+// and label-only buttons are untouched. `.gr-theme` (on <body>, inherited by
+// portalled overlays) lifts specificity above the library's own rule.
+.gr-theme {
+  button[data-variant='icon-after'] {
+    flex-direction: row-reverse;
+  }
+
+  button[data-variant='icon-after'],
+  button[data-variant='icon-before'] {
+    &[data-size='xs'] {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
+    &[data-size='s'],
+    &[data-size='m'] {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+  }
+}

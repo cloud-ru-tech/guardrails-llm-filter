@@ -1,0 +1,3 @@
+# Placeholder so `//go:embed all:dist` compiles before the UI is built.
+# The real console assets are produced by `npm run build` (locally) or the
+# Docker Node stage (CI) and overwrite this directory.

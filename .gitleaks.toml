@@ -1,0 +1,19 @@
+# gitleaks configuration for CI secret scanning of THIS repository.
+#
+# NOTE: this is NOT the guardrails detection ruleset. The engine's rule source
+# lives at configs/gitleaks.toml and is compiled into masking rules — it is not
+# a scanner config. This file only tells the CI secret scanner what to ignore.
+title = "guardrails-llm-filter secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and detection-rule sources contain secret-shaped strings that are not real credentials"
+paths = [
+  '''tests/rules/.*''',
+  '''tests/dataset/.*''',
+  '''tests/e2e/.*''',
+  '''configs/.*''',
+  '''.*_test\.go$''',
+]

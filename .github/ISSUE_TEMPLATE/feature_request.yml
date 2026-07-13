@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an enhancement to guardrails-llm-filter
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and what makes it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What behavior or API would you like? Include env vars / endpoints if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      description: This service never blocks traffic (mask/pass only) and the data path is fail-open.
+      options:
+        - label: My request preserves the mask/pass and fail-open invariants (or explicitly proposes changing them).
+          required: false

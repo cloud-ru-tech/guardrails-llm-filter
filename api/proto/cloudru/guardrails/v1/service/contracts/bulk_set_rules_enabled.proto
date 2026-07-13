@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.contracts;
+
+import "proto/protovalidate/buf/validate/validate.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/contracts;contractsv1";
+
+// BulkSetRulesEnabledRequest enables or disables many rules in one call.
+message BulkSetRulesEnabledRequest {
+  repeated string ids = 1 [
+    (buf.validate.field).repeated = {min_items: 1, max_items: 1000},
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Rule identifiers to update";
+    }
+  ];
+  // enabled is required and applies to every id.
+  optional bool enabled = 2 [
+    (buf.validate.field).required = true,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Desired enabled state applied to every id";
+    }
+  ];
+}
+
+// BulkSetRuleResult is one rule's outcome in a bulk operation.
+message BulkSetRuleResult {
+  string rule_id = 1;
+  // status is "ok" or "error".
+  string status = 2;
+  // error is set when status is "error".
+  string error = 3;
+}
+
+// BulkSetRulesEnabledResponse reports the per-rule outcome. The operation is
+// best-effort: each id is attempted independently and failures are reported
+// per item rather than aborting the batch.
+message BulkSetRulesEnabledResponse {
+  repeated BulkSetRuleResult results = 1;
+}

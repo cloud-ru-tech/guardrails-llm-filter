@@ -1,0 +1,106 @@
+# Prometheus alerting rules for guardrails-llm-filter (plain Prometheus setup;
+# reference this file from `rule_files` in prometheus.yml). The same group is
+# shipped as a PrometheusRule for prometheus-operator in
+# deploy/kubernetes/components/monitoring/.
+#
+# Adjust the `job` matcher in GuardrailsScrapeDown to your scrape config.
+groups:
+  - name: guardrails-llm-filter
+    rules:
+      - alert: GuardrailsMaskingFailures
+        expr: increase(extproc_guardrails_mask_failures_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Guardrails masking is failing
+          description: >
+            The mask use case errored {{ $value | printf "%.0f" }} times in
+            the last 5 minutes. The service is fail-open: affected requests
+            were forwarded to the LLM provider WITHOUT masking.
+
+      - alert: GuardrailsDemaskFailures
+        expr: sum by (mode) (increase(extproc_guardrails_demask_failures_total[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Guardrails demasking failures ({{ $labels.mode }})
+          description: >
+            Response demasking failed or fell back {{ $value | printf "%.0f" }}
+            times in the last 5 minutes (mode={{ $labels.mode }}). Clients may
+            see placeholders like <EMAIL_1> instead of their original values.
+
+      - alert: GuardrailsStateStoreFailures
+        expr: sum by (op) (increase(extproc_guardrails_masking_state_store_failures_total[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Guardrails masking-state store failures ({{ $labels.op }})
+          description: >
+            The masking-state store errored {{ $value | printf "%.0f" }} times
+            in 5 minutes (op={{ $labels.op }}). Traffic is unaffected in
+            single-replica setups, but cross-replica response demasking may
+            leave placeholders un-demasked.
+
+      - alert: GuardrailsAuditWriteFailures
+        expr: sum(increase(extproc_guardrails_audit_store_failures_total{op="put"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Guardrails audit writes are failing
+          description: >
+            Audit records failed to persist {{ $value | printf "%.0f" }} times
+            in 5 minutes. Masking itself is unaffected (audit is fail-open),
+            but the audit trail has gaps.
+
+      - alert: GuardrailsAuditRecordsDropped
+        expr: increase(extproc_guardrails_audit_records_dropped_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Guardrails audit records are being dropped
+          description: >
+            {{ $value | printf "%.0f" }} audit records were dropped in 5
+            minutes because the async write queue was saturated — the store
+            is too slow for the current request rate.
+
+      # requests_masked_total carries a mode label (enforce|detect); the
+      # sum() absorbs it, so this alert covers shadow-mode detections too.
+      - alert: GuardrailsMaskedTrafficSpike
+        expr: >
+          sum(rate(extproc_guardrails_requests_masked_total[15m])) >
+          3 * sum(rate(extproc_guardrails_requests_masked_total[15m] offset 1d))
+          and sum(rate(extproc_guardrails_requests_masked_total[15m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Spike in requests containing sensitive data
+          description: >
+            The rate of requests where PII/secrets were masked is more than
+            3x the same window yesterday. Possible data leak in prompts or a
+            misbehaving client.
+
+      - alert: GuardrailsPipelineSlow
+        expr: >
+          histogram_quantile(0.99,
+            sum by (le) (rate(extproc_guardrails_pipeline_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Guardrails pipeline p99 latency above 1s
+          description: >
+            The p99 of mask+demask time per request exceeded 1s for 10
+            minutes. Check scan volume metrics and store latency.
+
+      - alert: GuardrailsScrapeDown
+        expr: up{job=~".*guardrails.*"} == 0 or absent(up{job=~".*guardrails.*"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: guardrails metrics scrape is down
+          description: >
+            Prometheus cannot scrape guardrails for 5 minutes. If the
+            service itself is down, Envoy's failure_mode_allow decides whether
+            traffic flows unprotected (allow) or is rejected (deny).

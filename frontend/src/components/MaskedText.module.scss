@@ -1,0 +1,27 @@
+.masked {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--sys-neutral-background-opacity);
+  border: 1px solid var(--sys-neutral-decor-default);
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--sys-neutral-text-main);
+}
+
+.placeholder {
+  background: var(--sys-primary-background);
+  color: var(--sys-primary-accent-default);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-weight: 600;
+}
+
+// A placeholder whose original value is available reveals it on hover.
+.revealable {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}

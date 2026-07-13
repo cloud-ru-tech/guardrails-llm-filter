@@ -1,0 +1,8 @@
+# Keep the Docker build context small and reproducible. The Go build embeds the
+# console from `COPY --from=ui`, so local frontend build artifacts must not leak
+# into the context (they would shadow the freshly built assets).
+.git/
+bin/
+frontend/node_modules/
+frontend/dist/
+e2e-harness/

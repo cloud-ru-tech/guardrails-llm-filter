@@ -1,0 +1,724 @@
+openapi: 3.1.0
+info:
+  title: guardrails Configuration API
+  description: |
+    Runtime configuration and inspection for the guardrails services
+    (standalone HTTP and Envoy ext_proc share this API): CRUD for custom
+    regex detection rules, global settings, data-type discovery, a dry-run
+    rule tester, and observability (version, health, metrics summary).
+
+    Authentication: NONE. This API is unauthenticated and exposes mutating
+    endpoints (rules, settings) with no object-level authorization: anyone who
+    can reach the port can read every audit record (including masked request
+    texts when GUARDRAILS_AUDIT_STORE_MASKED_TEXTS=true) and mutate every rule
+    and setting. It MUST be protected at the network layer — reachable only on
+    a trusted network (cluster-internal), never through a public ingress.
+  version: 1.1.0
+servers:
+  - url: http://localhost:9080
+paths:
+  /v1/rules:
+    get:
+      summary: List detection rules
+      parameters:
+        - name: source
+          in: query
+          description: Filter by rule origin.
+          schema:
+            type: string
+            enum: [all, builtin, custom]
+            default: all
+      responses:
+        "200":
+          description: Rule list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      summary: Create a custom rule
+      description: |
+        The rule is validated with the production compile path (RE2 regex,
+        known validators, capture-group bounds, bounded placeholder) before
+        being persisted and atomically applied to the running rule set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Rule"
+      responses:
+        "201":
+          description: Rule created and active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: A rule with this rule_id already exists (custom or built-in).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      summary: Bulk enable or disable rules
+      description: >-
+        Enable or disable many rules in one call. Best-effort: each id is
+        attempted independently and its outcome reported per item, so a
+        single failure does not abort the batch (HTTP 200 with per-item
+        status). Built-in rules accept only the enable/disable toggle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkPatch"
+      responses:
+        "200":
+          description: Per-rule outcomes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkPatchResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get one rule (built-in or custom)
+      responses:
+        "200":
+          description: The rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Replace a custom rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Rule"
+      responses:
+        "200":
+          description: Rule updated and active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Built-in rules are immutable via the API.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      summary: Enable or disable a rule (built-in or custom)
+      description: >-
+        Toggles whether the rule participates in scanning. This is the only
+        mutation permitted on built-in rules. Idempotent; disabled rules stay
+        listed with `enabled: false` and are excluded from the compiled rule
+        set on all replicas after the rules refresh interval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePatch"
+      responses:
+        "200":
+          description: The rule with its new enabled state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a custom rule
+      responses:
+        "204":
+          description: Rule deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Built-in rules are immutable via the API.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/settings:
+    get:
+      summary: Get global guardrails settings
+      responses:
+        "200":
+          description: Current settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      summary: Replace global guardrails settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: Settings saved and applied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/data-types:
+    get:
+      summary: List data-type groups
+      responses:
+        "200":
+          description: Data types declared in the rule files plus CUSTOM.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data_types:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DataType"
+  /v1/scan:
+    post:
+      summary: Dry-run scan (rule tester)
+      description: >-
+        Scan sample text through the production compile + scan + mask path
+        without persisting masking state or calling any upstream. Optionally
+        supply a not-yet-saved candidate_rule to test it against the built-in
+        rules before saving. Returns triggered rules/data types, the masked
+        text and the placeholder substitutions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: Scan result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/version:
+    get:
+      summary: Build identity and topology
+      responses:
+        "200":
+          description: Version, build metadata, topology, store backend and live mode.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+  /v1/health:
+    get:
+      summary: Liveness of the configuration API
+      description: >-
+        Lightweight liveness signal on the config port. Reaching it means the
+        API server is up; also echoes the live mode and store backend. For
+        ext_proc-guardrails this is the only HTTP health endpoint (the data
+        path is gRPC).
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/metrics/summary:
+    get:
+      summary: Aggregated metrics summary
+      description: >-
+        JSON aggregates of the registered Prometheus counters and histograms,
+        so the console can show lifetime numbers without a Prometheus/Grafana
+        stack. Latency quantiles are approximate (interpolated from histogram
+        buckets).
+      responses:
+        "200":
+          description: Metrics summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsSummary"
+  /v1/audit/records:
+    get:
+      summary: List masking audit records
+      description: |
+        Per-request masking audit trail: which rules and data types fired
+        and which placeholders replaced the detected values. Records never
+        contain the original sensitive values; `masked_texts` is present
+        only when the service runs with
+        `GUARDRAILS_AUDIT_STORE_MASKED_TEXTS=true`.
+
+        Served only when `GUARDRAILS_AUDIT_ENABLED=true`; otherwise the
+        route does not exist (404). Newest records first; paginate with the
+        opaque `cursor` from the previous response. With the redis backend a
+        heavily filtered query may return fewer than `limit` records together
+        with a cursor — keep paging until `next_cursor` is absent.
+      parameters:
+        - name: model
+          in: query
+          description: Exact model match (x-gateway-model-name).
+          schema:
+            type: string
+        - name: path
+          in: query
+          description: Exact request path match.
+          schema:
+            type: string
+        - name: rule_id
+          in: query
+          description: Only records where this rule triggered.
+          schema:
+            type: string
+        - name: data_type
+          in: query
+          description: Only records where this data type triggered; number or name.
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: Inclusive lower bound (RFC3339).
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          description: Exclusive upper bound (RFC3339).
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: Page size, capped at 500.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+        - name: cursor
+          in: query
+          description: Opaque pagination cursor from a previous response.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of audit records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditRecordList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/audit/records/{request_id}:
+    get:
+      summary: Get the audit record of one request
+      description: Served only when `GUARDRAILS_AUDIT_ENABLED=true`.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          description: The x-request-id of the audited request.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The audit record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditRecord"
+        "404":
+          description: No audit record for this request id (never masked, expired or audit disabled).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  responses:
+    BadRequest:
+      description: Validation error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: No such rule.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Rule:
+      type: object
+      required: [rule_id, name, data_type, regex, masking]
+      properties:
+        rule_id:
+          type: string
+          pattern: "^[a-z0-9_.-]{1,128}$"
+        name:
+          type: string
+        group:
+          type: string
+        data_type:
+          type: integer
+          description: "1=CREDENTIALS 2=API_KEYS 3=ACCESS_TOKENS 4=IP_ADDRESSES 5=PERSONAL_DATA 6=CUSTOM"
+        regex:
+          type: string
+          description: RE2 regular expression.
+        keywords:
+          type: array
+          items:
+            type: string
+          description: Case-insensitive pre-filter; the regex only runs when a keyword is present.
+        validators:
+          type: array
+          items:
+            type: string
+            enum: [luhn, snils, inn_person, inn_org, ogrn, ogrnip, iban_mod97,
+                   email_ascii, payment_card, entropy, banlist, ip_v4, ip_v6,
+                   ip_public, ip_private]
+        min_length:
+          type: integer
+        entropy:
+          type: number
+          description: Minimum Shannon entropy for the entropy validator.
+        banlist:
+          type: array
+          items:
+            type: string
+        masking:
+          type: object
+          properties:
+            capture_groups:
+              type: array
+              items:
+                type: integer
+              description: 1-based capture groups to mask; empty masks the full match.
+            placeholder:
+              type: string
+              description: Placeholder type; detected values become `<PLACEHOLDER_N>`.
+        source:
+          type: string
+          enum: [builtin, custom]
+          readOnly: true
+        enabled:
+          type: boolean
+          readOnly: true
+          description: >-
+            false when the rule is disabled via PATCH /v1/rules/{id};
+            disabled rules are excluded from scanning.
+    RulePatch:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+    BulkPatch:
+      type: object
+      required: [ids, enabled]
+      additionalProperties: false
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+          description: Rule ids to toggle.
+        enabled:
+          type: boolean
+          description: Applied to every id.
+    BulkPatchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkPatchItem"
+    BulkPatchItem:
+      type: object
+      properties:
+        rule_id:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        error:
+          type: string
+          description: Present when status is error.
+    Settings:
+      type: object
+      required: [enabled, data_types]
+      properties:
+        enabled:
+          type: boolean
+        data_types:
+          type: array
+          description: Accepts numbers or names on input; always numbers on output.
+          items:
+            oneOf:
+              - type: integer
+              - type: string
+        mode:
+          type: string
+          enum: [enforce, detect]
+          default: enforce
+          description: >-
+            enforce masks traffic; detect (shadow mode) scans and records
+            metrics/audit but never mutates request or response bodies.
+            PUT replaces the whole settings document — omitting mode resets
+            it to enforce.
+    DataType:
+      type: object
+      properties:
+        data_type:
+          type: integer
+        name:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+    ScanRequest:
+      type: object
+      description: Provide either text (one sample) or texts (several).
+      properties:
+        text:
+          type: string
+        texts:
+          type: array
+          items:
+            type: string
+        data_types:
+          type: array
+          description: Narrows the scan; empty means all known. Numbers or names.
+          items:
+            oneOf:
+              - type: integer
+              - type: string
+        candidate_rule:
+          $ref: "#/components/schemas/Rule"
+    ScanResponse:
+      type: object
+      properties:
+        masked_texts:
+          type: array
+          items:
+            type: string
+          description: One masked text per input, in order.
+        triggered_rule_ids:
+          type: array
+          items:
+            type: string
+        triggered_data_types:
+          type: array
+          items:
+            type: integer
+        placeholders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Placeholder"
+        timings:
+          type: object
+          properties:
+            total_ms:
+              type: integer
+    Placeholder:
+      type: object
+      description: One original→placeholder substitution from the scanned sample.
+      properties:
+        placeholder:
+          type: string
+        original:
+          type: string
+        rule_id:
+          type: string
+    Version:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        date:
+          type: string
+        mode:
+          type: string
+          enum: [enforce, detect]
+        store_backend:
+          type: string
+        topology:
+          type: string
+          enum: [standalone, ext_proc]
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        mode:
+          type: string
+          enum: [enforce, detect]
+        store_backend:
+          type: string
+    MetricsSummary:
+      type: object
+      properties:
+        requests_masked_total:
+          type: object
+          additionalProperties:
+            type: number
+          description: Total masked requests keyed by mode (enforce/detect).
+        rule_triggers_total:
+          type: array
+          items:
+            $ref: "#/components/schemas/LabelCount"
+        data_type_triggers_total:
+          type: array
+          items:
+            $ref: "#/components/schemas/LabelCount"
+        passthrough_total:
+          type: object
+          additionalProperties:
+            type: number
+        latency_seconds:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Latency"
+    LabelCount:
+      type: object
+      properties:
+        label:
+          type: string
+        count:
+          type: number
+    Latency:
+      type: object
+      description: Sample count and bucket-interpolated (approximate) quantiles.
+      properties:
+        count:
+          type: integer
+        p50:
+          type: number
+        p95:
+          type: number
+    AuditRecord:
+      type: object
+      properties:
+        request_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+          description: Microsecond precision, UTC.
+        mode:
+          type: string
+          enum: [enforce, detect]
+          description: |
+            The guardrails mode in effect when the request was recorded.
+            `detect` records were scanned but the body was not mutated.
+        model:
+          type: string
+        path:
+          type: string
+        triggered_rule_ids:
+          type: array
+          items:
+            type: string
+        triggered_data_types:
+          type: array
+          items:
+            type: integer
+        replacements:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditReplacement"
+        masked_texts:
+          type: array
+          items:
+            type: string
+          description: |
+            Post-masking request texts (placeholders substituted, originals
+            absent). Present only when the service stores masked texts.
+        masked_response_texts:
+          type: array
+          items:
+            type: string
+          description: |
+            Post-masking model response texts (placeholders substituted,
+            originals absent) — the response counterpart of `masked_texts`.
+            Present only when the service scans and stores masked responses.
+    AuditReplacement:
+      type: object
+      description: >-
+        One masked value. The original is exposed only when the backend opts in
+        via GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS (off by default); otherwise the
+        `original` field is absent.
+      properties:
+        rule_id:
+          type: string
+        data_type:
+          type: integer
+          description: 0 when the rule was deleted before the record was written.
+        placeholder:
+          type: string
+          description: The placeholder that replaced the value, e.g. `<EMAIL_1>`.
+        original:
+          type: string
+          description: >-
+            The raw pre-masking value behind `placeholder`. Present only when the
+            backend is configured to store originals; used by the UI to reveal
+            the value on hover.
+    AuditRecordList:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditRecord"
+        next_cursor:
+          type: string
+          description: Present while more pages exist; pass back as `cursor`.
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
