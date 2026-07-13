@@ -1,0 +1,12 @@
+node_modules
+dist/*
+!dist/.gitkeep
+dist-ssr
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.vite
+coverage

@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: guardrails-llm-filter
+  labels:
+    app: guardrails-llm-filter
+spec:
+  selector:
+    matchLabels:
+      app: guardrails-llm-filter
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

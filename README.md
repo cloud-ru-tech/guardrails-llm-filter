@@ -1,0 +1,191 @@
+# guardrails-llm-filter
+
+**Маскирование PII и секретов в трафике к LLM в виде самостоятельного HTTP-сервиса.**
+
+guardrails-llm-filter стоит между вашими клиентами и LLM-провайдером. Клиенты обращаются к
+нему вместо провайдера: на пути к модели он сканирует тела запросов набором regex-правил
+детекции (~260 встроенных: учётные данные, API-ключи, access-токены, IP-адреса,
+персональные данные) и заменяет найденные значения синтетическими плейсхолдерами вида
+`<EMAIL_1>`; он сам пересылает маскированный запрос провайдеру, затем восстанавливает
+оригиналы в ответе — прозрачно для клиента, включая потоковую передачу токен-за-токеном
+(SSE).
+
+```
+client ──► guardrails-llm-filter ──[маскирование]──► LLM-провайдер
+   ▲                 │
+   └──[демаскирование]┘
+```
+
+LLM-провайдер никогда не видит чувствительные значения; клиент никогда не видит
+плейсхолдеры. Envoy или сайдкара в пути нет — guardrails-llm-filter сам является
+data-plane. (Родственный проект `guardrails-llm-filter-extproc` упаковывает тот же движок
+как gRPC-сайдкар Envoy `ext_proc`.)
+
+- **Поддерживаемые API**: OpenAI `/v1/chat/completions`, `/v1/responses`, Anthropic
+  `/v1/messages` — JSON и потоковые SSE-ответы, включая аргументы tool-call. Пути
+  сопоставляются по суффиксу, поэтому проксирующие монтирования
+  (`/openai/v1/chat/completions`) работают из коробки; полностью кастомные пути — через
+  `GUARDRAILS_PATHS`. Запрос, чьё тело формат не может разобрать, пересылается без
+  маскирования (fail-open) и увеличивает `extproc_guardrails_unsupported_body_schema_total`.
+  Любой другой путь проксируется на upstream без изменений.
+- **Fail-open по замыслу**: любая внутренняя ошибка пропускает трафик, а не ломает его.
+- **Модель вердикта**: маскировать/пропускать — значения заменяются, запросы никогда не
+  блокируются. **Detect (shadow) режим** (`GUARDRAILS_MODE=detect`) сканирует и пишет
+  метрики/аудит, не трогая трафик, чтобы оценить, что *было бы* замаскировано, до
+  включения enforce — затем переключитесь на `enforce` через API без передеплоя.
+
+## Быстрый старт
+
+Направьте guardrails-llm-filter на ваш upstream-провайдер, запустите и шлите запросы на
+`:8080` вместо провайдера:
+
+```sh
+make build
+# upstream endpoint: https://foundation-models.api.cloud.ru/v1/chat/completions
+GUARDRAILS_UPSTREAM_BASE_URL=https://foundation-models.api.cloud.ru \
+  ./bin/guardrails-llm-filter
+
+# в другом терминале — тот же запрос, что вы бы послали провайдеру, но другой хост:
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $CLOUDRU_API_KEY" \
+  -d '{"model":"ai-sage/GigaChat3-10B-A1.8B","messages":[{"role":"user","content":"email me at a@b.com"}]}'
+```
+
+Провайдер получает `<EMAIL_1>` вместо адреса; в ответе, который получаете вы, оригинал
+восстановлен.
+
+> Ключ `CLOUDRU_API_KEY` и список доступных моделей — в
+> [документации Cloud.ru Foundation Models](https://cloud.ru/docs/foundation-models/ug/topics/quickstart).
+
+### Запускаемое демо (реальный провайдер не нужен)
+
+```sh
+cd examples/quickstart
+docker compose up --build      # guardrails-llm-filter + mock echo-LLM
+bash demo.sh                   # шлёт промпты с фейковыми email/картой, показывает
+                               # маскированный текст на upstream и демаскированный вывод клиенту
+```
+
+## Как это работает
+
+Один HTTP-обработчик выполняет весь цикл на одной реплике: прочитать тело клиента →
+замаскировать → переслать маскированный запрос на upstream → демаскировать ответ
+(полностью или по кадрам для SSE) → вернуть клиенту. Поскольку запрос и его ответ
+обрабатываются вместе, masking state живёт в процессе на время жизни запроса — внешнее
+хранилище на data-path не нужно.
+
+Полный жизненный цикл запроса, движок правил и внутренности хранилища — в
+[`docs/`](docs/README.md).
+
+## Конфигурация
+
+Все переменные с префиксом `GUARDRAILS_`.
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `GUARDRAILS_LISTEN_ADDR` | `:8080` | data-plane HTTP-адрес (сюда обращаются клиенты) |
+| `GUARDRAILS_UPSTREAM_BASE_URL` | — | **обязательно**: базовый URL upstream LLM-провайдера; путь запроса дописывается к нему |
+| `GUARDRAILS_UPSTREAM_TIMEOUT` | `120s` | таймаут заголовков ответа upstream (время до первого байта); не ограничивает стриминговое тело, чья жизнь следует за соединением клиента |
+| `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS` | `100` | пул соединений upstream: максимум idle-соединений |
+| `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | `100` | пул соединений upstream: максимум idle на хост |
+| `GUARDRAILS_UPSTREAM_IDLE_CONN_TIMEOUT` | `90s` | пул соединений upstream: таймаут idle-соединения |
+| `GUARDRAILS_UPSTREAM_PATH_BASE_URLS` | — | per-path переопределения базового URL как пары `path=url` через запятую (например, `/v1/messages=https://api.anthropic.com`); путь не из списка использует `UPSTREAM_BASE_URL` |
+| `GUARDRAILS_UPSTREAM_INSECURE_SKIP_VERIFY` | `false` | ⚠️ отключает проверку TLS upstream — только для локального тестирования |
+| `GUARDRAILS_MAX_REQUEST_BYTES` | `33554432` (32 MiB) | лимит тела запроса до маскирования; превышение → 413; `0` отключает |
+| `GUARDRAILS_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
+| `GUARDRAILS_LOG_FORMAT` | `json` | `json` \| `text` |
+| `GUARDRAILS_METRICS_PORT` | `9090` | порт метрик Prometheus |
+| `GUARDRAILS_GRPC_ADDR` | `:9000` | management gRPC-адрес (`GuardrailsApi`); REST-API проксирует на него |
+| `GUARDRAILS_GRPC_SECURE` | `false` | self-signed TLS на management gRPC-listener; по умолчанию выкл (API рассчитан на работу внутри кластера) |
+| `GUARDRAILS_ENABLED` | `true` | глобальный вкл/выкл (seed-значение) |
+| `GUARDRAILS_MODE` | `enforce` | `detect` = shadow-режим: скан + метрики/аудит, трафик не тронут (seed) |
+| `GUARDRAILS_DATA_TYPES` | `1,2,3,4,5,6` | включённые типы данных, числа или имена (`6`/CUSTOM включает кастомные правила из API) |
+| `GUARDRAILS_KEYWORD_PREFILTER_ENABLED` | `false` | сохраняющий полноту keyword-пре-фильтр (ускоряет скан) |
+| `GUARDRAILS_MASK_PARALLEL_MIN_BYTES` | `8192` | суммарный размер текстов (байты), с которого скан распараллеливается по полям (нужно ≥2 поля); `0` — встроенное значение |
+| `GUARDRAILS_PATHS` | 3 стандартных пути | пары `path:format` (`chat_completions`, `messages`, `responses`); суффиксный матчинг, подмешиваются поверх дефолтов |
+| `GUARDRAILS_OVERRIDE_HEADER` | `x-guardrails-data-types` | per-request заголовок сужения (потребляется, не форвардится); пусто отключает |
+| `GUARDRAILS_SETTINGS_REFRESH_INTERVAL` | `30s` | интервал перечитывания настроек (сходимость реплик); `0` отключает |
+| `GUARDRAILS_RULES_REFRESH_INTERVAL` | `30s` | интервал перечитывания кастомных правил; `0` отключает |
+| `GUARDRAILS_RULES_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.yaml` | ручной файл правил |
+| `GUARDRAILS_RULES_GITLEAKS_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.gitleaks.generated.yaml` | генерируемый файл правил |
+| `GUARDRAILS_HEADERS_DATA_TYPES_HEADER` | `x-guardrails-data-types-triggered` | заголовок ответа со сработавшими типами данных |
+| `GUARDRAILS_HEADERS_TRIGGERED_RULES_HEADER` | `x-guardrails-triggered-rules` | заголовок ответа со сработавшими ID правил |
+| `GUARDRAILS_HEADERS_EXPOSE_TRIGGERED_RULES` | `false` | эмитить заголовок сработавших правил |
+| `GUARDRAILS_STORE_BACKEND` | `in_memory` | `in_memory` \| `redis` \| `postgres` — хранит кастомные правила, настройки и аудит (не masking state data-path, который в процессе) |
+| `GUARDRAILS_STORE_MASKING_TTL` | `15m` | страховочный TTL masking state (для межрепличного fallback); должен превышать самый длинный стриминговый ответ |
+| `GUARDRAILS_STORE_REDIS_ADDR` | `redis:6379` | адрес redis-бэкенда |
+| `GUARDRAILS_STORE_REDIS_PASSWORD` | — | пароль redis |
+| `GUARDRAILS_STORE_REDIS_DB` | `0` | база redis |
+| `GUARDRAILS_STORE_POSTGRES_DSN` | — | DSN postgres |
+| `GUARDRAILS_STORE_ENCRYPTION_ENABLED` | `false` | AES-256-GCM-шифрование masking state в redis/postgres на месте (no-op для in_memory) |
+| `GUARDRAILS_STORE_ENCRYPTION_KEY` | — | base64 32-байтный ключ (`openssl rand -base64 32`); обязателен при включённом шифровании |
+| `GUARDRAILS_API_ADDR` | `:9080` | адрес config API; пусто отключает API |
+| `GUARDRAILS_UI_ENABLED` | `true` | отдавать встроенную веб-консоль на `/` на порту API (no-op, если бинарь собран без UI) |
+| `GUARDRAILS_AUDIT_ENABLED` | `false` | аудит-трейл маскирования + эндпоинты `/v1/audit` |
+| `GUARDRAILS_AUDIT_STORE_MASKED_TEXTS` | `false` | дополнительно хранить маскированные тексты запроса (пользовательский контент — см. [SECURITY.md](SECURITY.md)) |
+| `GUARDRAILS_AUDIT_STORE_MASKED_RESPONSE_TEXTS` | `false` | дополнительно хранить маскированные тексты ответа модели (тот же класс чувствительности) |
+| `GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS` | `off` | хранить оригинал за каждым плейсхолдером для «показа по наведению» в UI: `off` \| `plain` \| `encrypted`. `encrypted` переиспользует ключ AES-256-GCM хранилища и требует `GUARDRAILS_STORE_ENCRYPTION_ENABLED`. БЕЗОПАСНОСТЬ: `plain`/`encrypted` сохраняют сырые чувствительные данные — ограничьте доступ к хранилищу |
+| `GUARDRAILS_AUDIT_RETENTION` | `24h` | сколько хранятся аудит-записи |
+| `GUARDRAILS_AUDIT_MAX_ENTRIES` | `10000` | только для `in_memory`: лимит аудит-записей (вытесняется старейшее) |
+
+Типы данных: `1 CREDENTIALS`, `2 API_KEYS`, `3 ACCESS_TOKENS`, `4 IP_ADDRESSES`,
+`5 PERSONAL_DATA`, `6 CUSTOM`. Имена принимаются регистронезависимо всюду, где принимаются
+числа.
+
+Env-значения только **засевают** глобальные настройки на первом старте; далее источник
+истины — config API (`GET/PUT /v1/settings`), перечитывается каждые
+`SETTINGS_REFRESH_INTERVAL`. Per-request override-заголовок работает **только на сужение**:
+он может пересечь глобальные типы данных, но никогда не расширить их; `none` пропускает
+маскирование для запроса; неразбираемый ввод полностью игнорируется (склон к защите).
+
+## Config API
+
+Отдельный HTTP API (`GUARDRAILS_API_ADDR`, по умолчанию `:9080`) управляет кастомными
+правилами и настройками и отдаёт аудит-трейл: `GET/PUT /v1/settings`,
+`GET/POST/DELETE /v1/rules[...]`, `PATCH /v1/rules/{id}` (вкл/выкл),
+`GET /v1/audit/records`. API определён контрактом proto-первично (сервис `GuardrailsApi`)
+и генерируется в gRPC на `GUARDRAILS_GRPC_ADDR` (`:9000`) + REST-прокси grpc-gateway на
+`GUARDRAILS_API_ADDR` (`:9080`); объединённая спека OpenAPI v2 —
+[`service.swagger.json`](service.swagger.json). API **неаутентифицирован** — защищайте на
+сетевом уровне (только внутри кластера, никогда публичный ingress).
+
+### Веб-консоль управления
+
+Веб-консоль для правил, настроек и аудит-трейла **вшита в бинарь** и отдаётся на `/` на том
+же management-порту (`:9080`) рядом с `/v1/*` API — один образ, без отдельного веб-сервера
+и без CORS. Включена по умолчанию (`GUARDRAILS_UI_ENABLED=false` отключает) и делит границу
+доверия API, поэтому действует то же правило «только внутри кластера». `Dockerfile` собирает
+её автоматически; исходники и dev-инструкции — в [`frontend/`](frontend/).
+
+## Наблюдаемость
+
+- **Health**: `GET /healthz` (liveness) и `GET /readyz` (readiness) на data-plane порту.
+- **Метрики**: Prometheus на `GUARDRAILS_METRICS_PORT` (`/metrics`), namespace
+  `extproc_guardrails`. Правила алертов и дашборд Grafana — в [`deploy/`](deploy/).
+- **Аудит-трейл** (`GUARDRAILS_AUDIT_ENABLED`): одна запись на маскированный запрос с
+  задействованными правилами, типами данных и плейсхолдерами.
+
+## Деплой
+
+Kustomize-манифесты — в [`deploy/kubernetes/`](deploy/kubernetes/): Deployment (HTTP-пробы
+`/healthz` + `/readyz`), Service, ConfigMap и Secret. Задайте `GUARDRAILS_UPSTREAM_BASE_URL`
+в ConfigMap. Distroless-образ собирается [`Dockerfile`](Dockerfile).
+
+## Разработка
+
+```sh
+make build       # бинарь -> ./bin/guardrails-llm-filter
+make frontend    # собрать SPA-консоль в frontend/dist (вшивается в make build)
+make test        # go test -race ./...  (postgres-хранилище нужен Docker; авто-скип)
+make test-short  # без Docker
+make lint        # golangci-lint run
+make rules-gen   # перегенерировать gitleaks-файл правил из configs/gitleaks.toml
+make demo-up     # сквозное демо: guardrails-llm-filter + mock LLM (examples/quickstart)
+```
+
+См. [CONTRIBUTING.md](CONTRIBUTING.md) и [`docs/`](docs/README.md).
+
+## Лицензия
+
+См. [LICENSE](LICENSE).

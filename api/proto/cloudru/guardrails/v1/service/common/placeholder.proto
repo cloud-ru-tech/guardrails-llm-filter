@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.common;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/common;commonv1";
+
+// Placeholder is one original->placeholder substitution from a dry-run scan.
+// It carries the original value, which is safe here because a scan operates on
+// the caller's own sample and persists nothing.
+message Placeholder {
+  string placeholder = 1 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Placeholder that replaced the value, e.g. <EMAIL_1>";
+    }
+  ];
+  string original = 2 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Original detected value (caller's own sample; not stored)";
+    }
+  ];
+  string rule_id = 3 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Rule that produced the match";
+    }
+  ];
+}

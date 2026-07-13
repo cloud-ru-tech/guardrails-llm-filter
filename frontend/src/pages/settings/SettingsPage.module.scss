@@ -1,0 +1,32 @@
+.card {
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 12px;
+  padding: 24px;
+  background: var(--sys-neutral-background);
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rowInline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hint {
+  color: var(--sys-neutral-text-support);
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}

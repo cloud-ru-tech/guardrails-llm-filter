@@ -1,0 +1,146 @@
+// Shared horizontal inset so the brand text, nav icons and nav labels all line
+// up on the same left edge.
+$nav-inset: 12px;
+
+.shell {
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 12px;
+  border-right: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px $nav-inset 16px;
+  border-bottom: 1px solid var(--sys-neutral-decor-default);
+}
+
+.brandMark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sys-primary-accent-default);
+}
+
+.brandLogo {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navLink {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px $nav-inset;
+  border-radius: 8px;
+  color: var(--sys-neutral-text-support);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  // Keep the glyph box fixed so every label starts on the same left edge.
+  svg {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+  }
+
+  &:hover {
+    background: var(--sys-neutral-background-opacity);
+    color: var(--sys-neutral-text-main);
+  }
+}
+
+.navLinkActive {
+  background: var(--sys-primary-background);
+  color: var(--sys-primary-accent-default);
+
+  // Accent rail on the active item.
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    border-radius: 0 3px 3px 0;
+    background: var(--sys-primary-accent-default);
+  }
+
+  &:hover {
+    background: var(--sys-primary-background);
+    color: var(--sys-primary-accent-default);
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--sys-neutral-decor-default);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.statusDot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.statusDotHealthy {
+  background: var(--sys-green-accent-default, #21a038);
+  box-shadow: 0 0 0 3px var(--sys-green-background);
+}
+
+.statusDotUnhealthy {
+  background: var(--sys-red-accent-default, #e02d3c);
+  box-shadow: 0 0 0 3px var(--sys-red-background);
+}
+
+.statusText {
+  color: var(--sys-neutral-text-support);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content {
+  flex: 1;
+  padding: 24px 32px 48px;
+  overflow: auto;
+}

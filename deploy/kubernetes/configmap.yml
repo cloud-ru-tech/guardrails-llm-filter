@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guardrails-llm-filter-env
+data:
+  GUARDRAILS_LOG_LEVEL: "info"
+  # Data-plane listen address clients point at (this is what callers hit
+  # instead of the upstream LLM provider directly).
+  GUARDRAILS_LISTEN_ADDR: ":8080"
+  # REQUIRED: the upstream LLM provider this service forwards masked requests
+  # to. The guarded request path is appended to it.
+  GUARDRAILS_UPSTREAM_BASE_URL: "https://your-llm-provider.example.com"
+  GUARDRAILS_STORE_BACKEND: "in_memory"
+  # For a shared store across replicas:
+  # GUARDRAILS_STORE_BACKEND: "redis"
+  # GUARDRAILS_STORE_REDIS_ADDR: "redis:6379"
+  # Encrypt masking state at rest in redis/postgres (key goes in the Secret
+  # as GUARDRAILS_STORE_ENCRYPTION_KEY):
+  # GUARDRAILS_STORE_ENCRYPTION_ENABLED: "true"
+  GUARDRAILS_ENABLED: "true"
+  # 6 = CUSTOM. Keep it enabled so custom rules created via the config API
+  # (which use data_type=CUSTOM) are actually scanned; dropping it silently
+  # disables every custom rule.
+  GUARDRAILS_DATA_TYPES: "1,2,3,4,5,6"
+  # The config API (:9080) exposes MUTATING rule/settings endpoints and is
+  # unauthenticated. Protect it at the network layer — keep the ClusterIP
+  # service cluster-internal only and never expose it through a public
+  # ingress. Disable it entirely with GUARDRAILS_API_ADDR: "" if unused.

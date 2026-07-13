@@ -1,0 +1,30 @@
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: end;
+}
+
+.filterActions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.mono {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-size: 14px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

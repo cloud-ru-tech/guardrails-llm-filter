@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.contracts;
+
+import "proto/protovalidate/buf/validate/validate.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/data_type.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/guardrail_rule.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/placeholder.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/contracts;contractsv1";
+
+// ScanRequest is a dry-run masking check. It reuses the production scan+mask
+// pipeline but persists nothing and calls no upstream.
+message ScanRequest {
+  // texts are the sample inputs to scan (in order).
+  repeated string texts = 1 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Sample inputs to scan";
+    }
+  ];
+  // text is a single-sample convenience; merged into texts when texts is empty.
+  string text = 2 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Single sample convenience; used only when texts is empty";
+    }
+  ];
+  // data_types narrows the scan; empty means all known types.
+  repeated common.DataType data_types = 3 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Limit the scan to these data types; empty means all";
+    }
+  ];
+  // candidate_rule tests a not-yet-saved rule against the sample.
+  common.GuardrailRule candidate_rule = 4 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      description: "Optional not-yet-saved rule to test";
+    }
+  ];
+}
+
+// ScanResponse is the dry-run scan result. Nothing here is persisted.
+message ScanResponse {
+  repeated string masked_texts = 1;
+  repeated string triggered_rule_ids = 2;
+  repeated common.DataType triggered_data_types = 3;
+  repeated common.Placeholder placeholders = 4;
+  // total_ms is the scan wall-clock time in milliseconds.
+  int32 total_ms = 5;
+}

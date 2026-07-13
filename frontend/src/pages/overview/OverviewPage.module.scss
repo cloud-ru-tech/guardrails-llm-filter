@@ -1,0 +1,113 @@
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.lifetime {
+  margin-bottom: 24px;
+}
+
+.lifetimeLists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.countList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.countRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.countValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-size: 14px;
+  color: var(--sys-neutral-text-main);
+  word-break: break-all;
+}
+
+.muted {
+  color: var(--sys-neutral-text-support);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .lifetimeLists {
+    grid-template-columns: 1fr;
+  }
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+  .full {
+    grid-column: auto;
+  }
+}
+
+.modeBar {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--sys-neutral-background-opacity);
+}
+
+.modeEnforce {
+  background: var(--chart-primary);
+}
+
+.modeDetect {
+  background: var(--chart-dt-3);
+}
+
+.modeLegend {
+  display: flex;
+  justify-content: space-between;
+  color: var(--sys-neutral-text-support);
+  font-size: 14px;
+}
+
+.tooltip {
+  background: var(--sys-neutral-background);
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--sys-neutral-text-main);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+.tooltipLabel {
+  color: var(--sys-neutral-text-support);
+  margin-bottom: 2px;
+}

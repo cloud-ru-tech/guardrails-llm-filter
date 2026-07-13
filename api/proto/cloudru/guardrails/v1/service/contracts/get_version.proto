@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.contracts;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/contracts;contractsv1";
+
+// GetVersionRequest reads the service build identity and live mode.
+message GetVersionRequest {}
+
+// GetVersionResponse is the service build identity plus the live masking mode.
+message GetVersionResponse {
+  string version = 1;
+  string commit = 2;
+  string date = 3;
+  // mode is the live masking mode ("enforce" or "detect").
+  string mode = 4;
+  string store_backend = 5;
+  string topology = 6;
+}

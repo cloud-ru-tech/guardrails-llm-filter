@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.contracts;
+
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/audit_record.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/data_type.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/contracts;contractsv1";
+
+// ListAuditRecordsRequest filters and paginates the masking audit trail. Zero
+// values mean "any".
+message ListAuditRecordsRequest {
+  string model = 1;
+  string path = 2;
+  string rule_id = 3;
+  common.DataType data_type = 4;
+  google.protobuf.Timestamp since = 5;
+  google.protobuf.Timestamp until = 6;
+  // limit is the page size; 0 uses the default, capped server-side.
+  int32 limit = 7;
+  // cursor is the opaque cursor from a previous response ("" = first page).
+  string cursor = 8;
+}
+
+// ListAuditRecordsResponse is one page of audit records.
+message ListAuditRecordsResponse {
+  repeated common.AuditRecord records = 1;
+  // next_cursor is empty when the listing is exhausted.
+  string next_cursor = 2;
+}

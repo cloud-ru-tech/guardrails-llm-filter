@@ -1,0 +1,1378 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Guardrails Management API",
+    "description": "Management API for the standalone guardrails service: custom rule CRUD, global settings, data-type discovery and dry-run masking checks. The data-plane LLM proxy is a separate HTTP surface and is not part of this contract.",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "Guardrails",
+      "description": "Rule, settings and data-type management, plus dry-run scan"
+    }
+  ],
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/audit/records": {
+      "get": {
+        "summary": "List audit records",
+        "operationId": "GuardrailsApi_ListAuditRecords",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsListAuditRecordsResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "ruleId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "dataType",
+            "description": " - DATA_TYPE_UNSPECIFIED: Unspecified data type.\n - DATA_TYPE_CREDENTIALS: Credentials and account identifiers.\n - DATA_TYPE_API_KEYS: API keys and tokens for service access.\n - DATA_TYPE_ACCESS_TOKENS: Access tokens and bearer tokens.\n - DATA_TYPE_IP_ADDRESSES: IP addresses.\n - DATA_TYPE_PERSONAL_DATA: Personal identifiable information.\n - DATA_TYPE_CUSTOM: Custom category: rules created via the configuration API.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "DATA_TYPE_UNSPECIFIED",
+              "DATA_TYPE_CREDENTIALS",
+              "DATA_TYPE_API_KEYS",
+              "DATA_TYPE_ACCESS_TOKENS",
+              "DATA_TYPE_IP_ADDRESSES",
+              "DATA_TYPE_PERSONAL_DATA",
+              "DATA_TYPE_CUSTOM"
+            ],
+            "default": "DATA_TYPE_UNSPECIFIED"
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "limit",
+            "description": "limit is the page size; 0 uses the default, capped server-side.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "cursor",
+            "description": "cursor is the opaque cursor from a previous response (\"\" = first page).",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/audit/records/{requestId}": {
+      "get": {
+        "summary": "Get audit record",
+        "operationId": "GuardrailsApi_GetAuditRecord",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonAuditRecord"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "description": "The x-request-id of the masked request",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/data-types": {
+      "get": {
+        "summary": "List data types",
+        "operationId": "GuardrailsApi_GetDataTypes",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsGetDataTypesResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/rules": {
+      "get": {
+        "summary": "List rules",
+        "operationId": "GuardrailsApi_ListRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsListRulesResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "source",
+            "description": "Rule source filter: all|builtin|custom (default all)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "post": {
+        "summary": "Create custom rule",
+        "operationId": "GuardrailsApi_CreateRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailRule"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "A detection rule: RE2 regex plus optional validators and masking policy",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailRule"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "patch": {
+        "summary": "Bulk enable or disable rules",
+        "operationId": "GuardrailsApi_BulkSetRulesEnabled",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsBulkSetRulesEnabledResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "BulkSetRulesEnabledRequest enables or disables many rules in one call.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/contractsBulkSetRulesEnabledRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/rules/{ruleId}": {
+      "get": {
+        "summary": "Get rule",
+        "operationId": "GuardrailsApi_GetRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailRule"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ruleId",
+            "description": "Rule identifier",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "delete": {
+        "summary": "Delete custom rule",
+        "operationId": "GuardrailsApi_DeleteRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ruleId",
+            "description": "Custom rule identifier",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "put": {
+        "summary": "Update custom rule",
+        "operationId": "GuardrailsApi_UpdateRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailRule"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ruleId",
+            "description": "Unique rule identifier",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GuardrailsApiUpdateRuleBody"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "patch": {
+        "summary": "Enable or disable a rule",
+        "operationId": "GuardrailsApi_SetRuleEnabled",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailRule"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "ruleId",
+            "description": "Rule identifier",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GuardrailsApiSetRuleEnabledBody"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/scan": {
+      "post": {
+        "summary": "Dry-run masking scan",
+        "operationId": "GuardrailsApi_Scan",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsScanResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "ScanRequest is a dry-run masking check. It reuses the production scan+mask\npipeline but persists nothing and calls no upstream.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/contractsScanRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/settings": {
+      "get": {
+        "summary": "Get global settings",
+        "operationId": "GuardrailsApi_GetSettings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailsSettings"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "Guardrails"
+        ]
+      },
+      "put": {
+        "summary": "Update global settings",
+        "operationId": "GuardrailsApi_UpdateSettings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailsSettings"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "Global masking policy applied to all traffic",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/commonGuardrailsSettings"
+            }
+          }
+        ],
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "summary": "Get version",
+        "operationId": "GuardrailsApi_GetVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/contractsGetVersionResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request - invalid parameters or malformed request",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "Guardrails"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "GuardrailsApiSetRuleEnabledBody": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Desired enabled state"
+        }
+      },
+      "description": "SetRuleEnabledRequest enables or disables one rule. This is the only\nmutation permitted on built-in rules."
+    },
+    "GuardrailsApiUpdateRuleBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name"
+        },
+        "group": {
+          "type": "string",
+          "description": "Rule group (informational)"
+        },
+        "dataType": {
+          "$ref": "#/definitions/commonDataType",
+          "description": "Data category this rule detects"
+        },
+        "regex": {
+          "type": "string",
+          "description": "RE2 detection pattern"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional keyword pre-filter terms"
+        },
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional candidate validators (e.g. luhn, entropy, ip_v4)"
+        },
+        "minLength": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Minimum matched length before a hit counts"
+        },
+        "entropy": {
+          "type": "number",
+          "format": "double",
+          "description": "Minimum Shannon entropy for the entropy validator"
+        },
+        "banlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values excluded from matching"
+        },
+        "masking": {
+          "$ref": "#/definitions/commonMasking",
+          "description": "Masking policy for this rule"
+        },
+        "source": {
+          "type": "string",
+          "description": "Response-only: \"builtin\" or \"custom\""
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Response-only: whether the rule is currently enabled"
+        }
+      },
+      "description": "A detection rule: RE2 regex plus optional validators and masking policy",
+      "title": "Guardrail Rule"
+    },
+    "commonAuditRecord": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "triggeredRuleIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "triggeredDataTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonDataType"
+          }
+        },
+        "replacements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/commonAuditReplacement"
+          }
+        },
+        "maskedTexts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maskedResponseTexts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "masked_response_texts holds the post-masking model response texts\n(placeholders substituted, originals absent) — the response counterpart of\nmasked_texts. Populated only when GUARDRAILS_AUDIT_STORE_MASKED_RESPONSE_TEXTS\nis enabled."
+        }
+      },
+      "description": "One per-request masking audit entry. Original values are omitted unless GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS is enabled.",
+      "title": "Audit Record"
+    },
+    "commonAuditReplacement": {
+      "type": "object",
+      "properties": {
+        "ruleId": {
+          "type": "string"
+        },
+        "dataType": {
+          "$ref": "#/definitions/commonDataType"
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "original": {
+          "type": "string",
+          "description": "original is the raw pre-masking value behind placeholder. Empty unless\nGUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS is enabled; decrypted by the API\nbefore it is returned. SECURITY: raw sensitive data — access-control it."
+        }
+      },
+      "description": "AuditReplacement is the audit-safe projection of a masking replacement. The\noriginal value is present only when the operator opts in via\nGUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS (off by default); see original."
+    },
+    "commonDataType": {
+      "type": "string",
+      "example": "DATA_TYPE_CREDENTIALS",
+      "enum": [
+        "DATA_TYPE_UNSPECIFIED",
+        "DATA_TYPE_CREDENTIALS",
+        "DATA_TYPE_API_KEYS",
+        "DATA_TYPE_ACCESS_TOKENS",
+        "DATA_TYPE_IP_ADDRESSES",
+        "DATA_TYPE_PERSONAL_DATA",
+        "DATA_TYPE_CUSTOM"
+      ],
+      "default": "DATA_TYPE_UNSPECIFIED",
+      "description": "Sensitive data category. Exclude DATA_TYPE_UNSPECIFIED in requests."
+    },
+    "commonGuardrailRule": {
+      "type": "object",
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "example": "my-custom-email",
+          "description": "Unique rule identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name"
+        },
+        "group": {
+          "type": "string",
+          "description": "Rule group (informational)"
+        },
+        "dataType": {
+          "$ref": "#/definitions/commonDataType",
+          "description": "Data category this rule detects"
+        },
+        "regex": {
+          "type": "string",
+          "description": "RE2 detection pattern"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional keyword pre-filter terms"
+        },
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional candidate validators (e.g. luhn, entropy, ip_v4)"
+        },
+        "minLength": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Minimum matched length before a hit counts"
+        },
+        "entropy": {
+          "type": "number",
+          "format": "double",
+          "description": "Minimum Shannon entropy for the entropy validator"
+        },
+        "banlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values excluded from matching"
+        },
+        "masking": {
+          "$ref": "#/definitions/commonMasking",
+          "description": "Masking policy for this rule"
+        },
+        "source": {
+          "type": "string",
+          "description": "Response-only: \"builtin\" or \"custom\""
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Response-only: whether the rule is currently enabled"
+        }
+      },
+      "description": "A detection rule: RE2 regex plus optional validators and masking policy",
+      "title": "Guardrail Rule"
+    },
+    "commonGuardrailsSettings": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether masking is enabled globally"
+        },
+        "dataTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonDataType"
+          },
+          "description": "Enabled data categories"
+        },
+        "mode": {
+          "type": "string",
+          "example": "enforce",
+          "description": "Enforcement mode: \"enforce\" (default) or \"detect\""
+        }
+      },
+      "description": "Global masking policy applied to all traffic",
+      "title": "Guardrails Settings"
+    },
+    "commonMasking": {
+      "type": "object",
+      "properties": {
+        "captureGroups": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Regex capture groups to mask; empty masks the full match"
+        },
+        "placeholder": {
+          "type": "string",
+          "example": "EMAIL",
+          "description": "Placeholder base name; rendered as \u003cNAME_N\u003e"
+        }
+      },
+      "description": "Masking describes how a detected value is replaced during masking."
+    },
+    "commonPlaceholder": {
+      "type": "object",
+      "properties": {
+        "placeholder": {
+          "type": "string",
+          "description": "Placeholder that replaced the value, e.g. \u003cEMAIL_1\u003e"
+        },
+        "original": {
+          "type": "string",
+          "description": "Original detected value (caller's own sample; not stored)"
+        },
+        "ruleId": {
+          "type": "string",
+          "description": "Rule that produced the match"
+        }
+      },
+      "description": "Placeholder is one original-\u003eplaceholder substitution from a dry-run scan.\nIt carries the original value, which is safe here because a scan operates on\nthe caller's own sample and persists nothing."
+    },
+    "contractsBulkSetRuleResult": {
+      "type": "object",
+      "properties": {
+        "ruleId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "status is \"ok\" or \"error\"."
+        },
+        "error": {
+          "type": "string",
+          "description": "error is set when status is \"error\"."
+        }
+      },
+      "description": "BulkSetRuleResult is one rule's outcome in a bulk operation."
+    },
+    "contractsBulkSetRulesEnabledRequest": {
+      "type": "object",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rule identifiers to update"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Desired enabled state applied to every id"
+        }
+      },
+      "description": "BulkSetRulesEnabledRequest enables or disables many rules in one call."
+    },
+    "contractsBulkSetRulesEnabledResponse": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/contractsBulkSetRuleResult"
+          }
+        }
+      },
+      "description": "BulkSetRulesEnabledResponse reports the per-rule outcome. The operation is\nbest-effort: each id is attempted independently and failures are reported\nper item rather than aborting the batch."
+    },
+    "contractsDataTypeInfo": {
+      "type": "object",
+      "properties": {
+        "dataType": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Numeric data-type ID"
+        },
+        "name": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "description": "DataTypeInfo describes one toggleable data-type group."
+    },
+    "contractsGetDataTypesResponse": {
+      "type": "object",
+      "properties": {
+        "dataTypes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/contractsDataTypeInfo"
+          }
+        }
+      },
+      "description": "GetDataTypesResponse is the catalog of data-type groups plus CUSTOM."
+    },
+    "contractsGetVersionResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "description": "mode is the live masking mode (\"enforce\" or \"detect\")."
+        },
+        "storeBackend": {
+          "type": "string"
+        },
+        "topology": {
+          "type": "string"
+        }
+      },
+      "description": "GetVersionResponse is the service build identity plus the live masking mode."
+    },
+    "contractsListAuditRecordsResponse": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/commonAuditRecord"
+          }
+        },
+        "nextCursor": {
+          "type": "string",
+          "description": "next_cursor is empty when the listing is exhausted."
+        }
+      },
+      "description": "ListAuditRecordsResponse is one page of audit records."
+    },
+    "contractsListRulesResponse": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/commonGuardrailRule"
+          }
+        }
+      },
+      "description": "ListRulesResponse is the list of rules."
+    },
+    "contractsScanRequest": {
+      "type": "object",
+      "properties": {
+        "texts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sample inputs to scan"
+        },
+        "text": {
+          "type": "string",
+          "description": "Single sample convenience; used only when texts is empty"
+        },
+        "dataTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonDataType"
+          },
+          "description": "Limit the scan to these data types; empty means all"
+        },
+        "candidateRule": {
+          "$ref": "#/definitions/commonGuardrailRule",
+          "description": "Optional not-yet-saved rule to test"
+        }
+      },
+      "description": "ScanRequest is a dry-run masking check. It reuses the production scan+mask\npipeline but persists nothing and calls no upstream."
+    },
+    "contractsScanResponse": {
+      "type": "object",
+      "properties": {
+        "maskedTexts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "triggeredRuleIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "triggeredDataTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonDataType"
+          }
+        },
+        "placeholders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/commonPlaceholder"
+          }
+        },
+        "totalMs": {
+          "type": "integer",
+          "format": "int32",
+          "description": "total_ms is the scan wall-clock time in milliseconds."
+        }
+      },
+      "description": "ScanResponse is the dry-run scan result. Nothing here is persisted."
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

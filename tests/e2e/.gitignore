@@ -1,0 +1,9 @@
+# Generated / runtime artifacts of the local e2e harness.
+# Only these generated artifacts are ignored; the drivers, scripts, and mock
+# upstream under tests/e2e/ are committed.
+capture/
+results/
+plan_base.jsonl
+plan_expanded.jsonl
+upstream-bin
+*.log

@@ -1,0 +1,36 @@
+services:
+  guardrails-llm-filter:
+    build:
+      context: ../..
+    environment:
+      GUARDRAILS_LOG_LEVEL: debug
+      GUARDRAILS_LOG_FORMAT: text
+      # Clients hit guardrails-llm-filter directly on :8080; it forwards masked requests
+      # to this upstream and demasks the responses on the way back.
+      GUARDRAILS_UPSTREAM_BASE_URL: http://mock-llm:8000
+      # Default in_memory store needs no dependencies. Try redis:
+      #   GUARDRAILS_STORE_BACKEND: redis
+      #   GUARDRAILS_STORE_REDIS_ADDR: redis:6379
+      GUARDRAILS_STORE_BACKEND: in_memory
+      GUARDRAILS_HEADERS_EXPOSE_TRIGGERED_RULES: "true"
+      # Per-request masking audit trail (GET :9080/v1/audit/records):
+      GUARDRAILS_AUDIT_ENABLED: "true"
+      # Uncomment to also store the masked request texts in audit records:
+      #   GUARDRAILS_AUDIT_STORE_MASKED_TEXTS: "true"
+      # The configuration API (:9080) is unauthenticated. This demo exposes it
+      # on a trusted local network; in production protect it at the network
+      # layer (cluster-internal only, never public ingress).
+    ports:
+      - "8080:8080" # data-plane: LLM traffic entrypoint (clients point here)
+      - "9080:9080" # configuration API
+      - "9090:9090" # Prometheus metrics
+    depends_on:
+      - mock-llm
+
+  # Uncomment for the redis store backend:
+  # redis:
+  #   image: redis:7-alpine
+
+  mock-llm:
+    build:
+      context: ./mock-llm

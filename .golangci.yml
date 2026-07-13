@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - misspell
+    - unconvert
+    - unparam
+  settings:
+    staticcheck:
+      checks: ["all", "-ST1000"]
+  exclusions:
+    paths:
+      # JS toolchain deps and build output under the embedded console. Some npm
+      # packages ship stray .go files that Go tooling would otherwise sweep in.
+      - frontend/node_modules
+      - frontend/dist
+
+run:
+  timeout: 5m
+  tests: true

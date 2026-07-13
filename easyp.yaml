@@ -1,0 +1,52 @@
+version: v1
+deps:
+  - github.com/googleapis/googleapis
+  - github.com/grpc-ecosystem/grpc-gateway@v2.27.3
+  - github.com/bufbuild/protovalidate@v1.0.0
+generate:
+  inputs:
+    - directory: "api"
+  plugins:
+    - name: go
+      out: ./pkg
+      opts:
+        paths: source_relative
+    - name: go-grpc
+      out: ./pkg
+      opts:
+        paths: source_relative
+        require_unimplemented_servers: false
+    - name: grpc-gateway
+      out: ./pkg
+      opts:
+        paths: source_relative
+    - name: openapiv2
+      out: .
+      opts:
+        logtostderr: true
+        use_go_templates: true
+        allow_merge: true
+        merge_file_name: service
+        simple_operation_ids: false
+        generate_unbound_methods: false
+build:
+  excludes: []
+lint:
+  use:
+    - DEFAULT
+  except: []
+  ignore: []
+  ignore_only: {}
+  allow_comment_ignores: false
+  enum_zero_value_suffix: NONE
+  rpc_allow_same_request_response: false
+  rpc_allow_google_protobuf_empty_requests: false
+  rpc_allow_google_protobuf_empty_responses: false
+  service_suffix: Api
+breaking:
+  use:
+    - FILE
+  except: []
+  ignore: []
+  ignore_only: {}
+  ignore_unstable_packages: false

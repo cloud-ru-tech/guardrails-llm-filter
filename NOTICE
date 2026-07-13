@@ -1,0 +1,7 @@
+guardrails-llm-filter
+Copyright 2026 Cloud.ru
+
+This product includes detection rules derived from the gitleaks project
+(https://github.com/gitleaks/gitleaks), licensed under the MIT License.
+See configs/gitleaks.toml and the generated
+configs/guardrails_regex_rules.gitleaks.generated.yaml.

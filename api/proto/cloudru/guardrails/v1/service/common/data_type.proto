@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.common;
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/common;commonv1";
+
+// DataType is a user-facing toggle category of detection rules. It mirrors
+// internal/models.DataType (numeric IDs must stay consistent across the enum,
+// the YAML rule files and the API). CUSTOM is reserved for rules created via
+// the configuration API that do not fit a built-in category.
+enum DataType {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_enum) = {
+    description: "Sensitive data category. Exclude DATA_TYPE_UNSPECIFIED in requests.";
+    example: "\"DATA_TYPE_CREDENTIALS\"";
+  };
+
+  // Unspecified data type.
+  DATA_TYPE_UNSPECIFIED = 0;
+  // Credentials and account identifiers.
+  DATA_TYPE_CREDENTIALS = 1;
+  // API keys and tokens for service access.
+  DATA_TYPE_API_KEYS = 2;
+  // Access tokens and bearer tokens.
+  DATA_TYPE_ACCESS_TOKENS = 3;
+  // IP addresses.
+  DATA_TYPE_IP_ADDRESSES = 4;
+  // Personal identifiable information.
+  DATA_TYPE_PERSONAL_DATA = 5;
+  // Custom category: rules created via the configuration API.
+  DATA_TYPE_CUSTOM = 6;
+}

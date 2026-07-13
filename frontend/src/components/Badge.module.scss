@@ -1,0 +1,40 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  font-family: var(--sans-body-s-font-family, system-ui, sans-serif);
+}
+
+.neutral {
+  background: var(--sys-neutral-background-opacity);
+  color: var(--sys-neutral-text-support);
+}
+.red {
+  background: var(--sys-red-background);
+  color: var(--sys-red-text-main);
+}
+.orange {
+  background: var(--sys-orange-background);
+  color: var(--sys-orange-text-main);
+}
+.yellow {
+  background: var(--sys-yellow-background);
+  color: var(--sys-yellow-text-main);
+}
+.blue {
+  background: var(--sys-blue-background);
+  color: var(--sys-blue-text-main);
+}
+.violet {
+  background: var(--sys-violet-background);
+  color: var(--sys-violet-text-main);
+}
+.green {
+  background: var(--sys-green-background);
+  color: var(--sys-green-text-main);
+}

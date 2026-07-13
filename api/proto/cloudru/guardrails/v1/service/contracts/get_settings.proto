@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service.contracts;
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service/contracts;contractsv1";
+
+// GetSettingsRequest reads the global guardrails settings.
+message GetSettingsRequest {}

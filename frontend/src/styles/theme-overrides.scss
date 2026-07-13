@@ -1,0 +1,114 @@
+@use 'sass:list';
+
+// The Cloud.ru figma-tokens hard-code `SB Sans Interface` / `SB Sans Text Mono`
+// as the font-family for all 75 type tokens, but ship no font files and no
+// @font-face — so browsers without the (proprietary) Sber font fall back to
+// serif. We load open, visually-matching substitutes (Inter / JetBrains Mono,
+// imported in main.tsx) and remap the tokens to a proper stack. The real Sber
+// font stays first, so machines that have it installed still use it.
+//
+// Selector is doubled (`.gr-theme.gr-theme`) to outrank the `.light`/`.dark`
+// token classes that live on the same element (<body>), regardless of import order.
+
+$sans-families: 'crossed-out', 'light', 'link', 'sans';
+$purposes: 'display', 'headline', 'title', 'label', 'body';
+$sizes: 'l', 'm', 's';
+
+$sans-stack: 'SB Sans Interface', 'Inter Variable', 'Inter', system-ui, -apple-system,
+  'Segoe UI', Roboto, sans-serif;
+$mono-stack: 'SB Sans Text Mono', 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular',
+  Menlo, Consolas, monospace;
+
+// The Cloud.ru type ramp is tuned for dense product surfaces and reads small on
+// this console. Bump each step up ~1 notch, growing font-size and line-height
+// together so every <Typography> scales consistently. `display` is left alone
+// (already large — used for the big stat numbers). The `label` purpose is also
+// deliberately NOT scaled here: it feeds fixed-height controls (buttons, chips,
+// segmented controls) whose vertical centering depends on the DS-tuned
+// line-height — inflating it pushes their text off-centre. Controls stay at their
+// native size; where a larger label is wanted (nav) it's set explicitly on the
+// component. Map: purpose → size → (font-size, line-height).
+$type-ramp: (
+  'body': (
+    's': (13px, 18px),
+    'm': (15px, 22px),
+    'l': (17px, 26px),
+  ),
+  'title': (
+    's': (16px, 22px),
+    'm': (18px, 26px),
+    'l': (22px, 30px),
+  ),
+  'headline': (
+    's': (26px, 34px),
+    'm': (30px, 40px),
+    'l': (34px, 44px),
+  ),
+);
+
+.gr-theme.gr-theme {
+  @each $fam in $sans-families {
+    @each $p in $purposes {
+      @each $s in $sizes {
+        --#{$fam}-#{$p}-#{$s}-font-family: #{$sans-stack};
+      }
+    }
+  }
+
+  @each $p in $purposes {
+    @each $s in $sizes {
+      --mono-#{$p}-#{$s}-font-family: #{$mono-stack};
+    }
+  }
+
+  @each $purpose, $sizes-map in $type-ramp {
+    @each $size, $vals in $sizes-map {
+      --sans-#{$purpose}-#{$size}-font-size: #{list.nth($vals, 1)};
+      --sans-#{$purpose}-#{$size}-line-height: #{list.nth($vals, 2)};
+      --mono-#{$purpose}-#{$size}-font-size: #{list.nth($vals, 1)};
+      --mono-#{$purpose}-#{$size}-line-height: #{list.nth($vals, 2)};
+    }
+  }
+}
+
+// Categorical chart palette — accessible marks that harmonize with the Cloud.ru
+// brand green, keyed to data-type ids. Grid/axis reuse neutral tokens so charts
+// stay theme-aware automatically.
+.gr-theme {
+  --chart-grid: var(--sys-neutral-decor-default);
+  --chart-axis: var(--sys-neutral-text-support);
+  --chart-primary: #30a46c;
+  --chart-dt-1: #e5484d; // CREDENTIALS
+  --chart-dt-2: #f76b15; // API_KEYS
+  --chart-dt-3: #d9822b; // ACCESS_TOKENS
+  --chart-dt-4: #3b82f6; // IP_ADDRESSES
+  --chart-dt-5: #8e4ec6; // PERSONAL_DATA
+  --chart-dt-6: #80838d; // CUSTOM
+}
+
+.gr-theme[data-theme='dark'] {
+  --chart-primary: #3dd68c;
+  --chart-dt-1: #ff6369;
+  --chart-dt-2: #ff8b3e;
+  --chart-dt-3: #f0c000;
+  --chart-dt-4: #5eb0ef;
+  --chart-dt-5: #bf7af0;
+  --chart-dt-6: #a1a1aa;
+}
+
+// Separators & surfaces. The stock `--sys-neutral-decor-default` border is nearly
+// invisible against the surface (both are near-identical greys), so cards, tiles,
+// tables, inputs and outline buttons "melt" into the page. We (1) strengthen the
+// neutral separator token — it feeds every one of those borders at once — and
+// (2) introduce an app canvas one step below the surface tokens, so cards read as
+// elevated instead of sharing the page colour. Doubled selector outranks the
+// `.light`/`.dark` token classes on <body> (same rationale as the font remap).
+.gr-theme.gr-theme {
+  --sys-neutral-decor-default: #ccd0dd;
+  --gr-canvas: #e5e7ee;
+}
+
+.gr-theme.gr-theme[data-theme='dark'] {
+  --sys-neutral-decor-default: #474958;
+  --gr-canvas: #141419;
+}

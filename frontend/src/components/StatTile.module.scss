@@ -1,0 +1,29 @@
+.tile {
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 12px;
+  background: var(--sys-neutral-background);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: var(--sys-neutral-text-support);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 13px;
+}
+
+.value {
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+}
+
+.accent {
+  color: var(--sys-primary-accent-default);
+}
+
+.hint {
+  color: var(--sys-neutral-text-support);
+}

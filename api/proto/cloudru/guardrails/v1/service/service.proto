@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package cloudru.guardrails.v1.service;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+import "api/proto/cloudru/guardrails/v1/service/common/guardrail_rule.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/settings.proto";
+import "api/proto/cloudru/guardrails/v1/service/common/audit_record.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/list_rules.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/get_rule.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/set_rule_enabled.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/bulk_set_rules_enabled.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/delete_rule.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/get_settings.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/get_data_types.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/scan.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/list_audit_records.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/get_audit_record.proto";
+import "api/proto/cloudru/guardrails/v1/service/contracts/get_version.proto";
+
+option go_package = "github.com/cloud-ru-tech/guardrails-llm-filter/pkg/api/proto/cloudru/guardrails/v1/service;servicev1";
+
+// GuardrailsApi is the management API for the standalone guardrails service.
+// It mirrors the previous hand-rolled REST config API 1:1 via grpc-gateway.
+service GuardrailsApi {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+    name: "Guardrails";
+    description: "Custom rule CRUD, global settings, data-type discovery and dry-run masking checks";
+  };
+
+  // ListRules returns built-in and/or custom rules.
+  rpc ListRules(contracts.ListRulesRequest) returns (contracts.ListRulesResponse) {
+    option (google.api.http) = {get: "/v1/rules"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List rules";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // CreateRule creates a custom rule.
+  rpc CreateRule(common.GuardrailRule) returns (common.GuardrailRule) {
+    option (google.api.http) = {
+      post: "/v1/rules"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Create custom rule";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // GetRule reads one rule by ID.
+  rpc GetRule(contracts.GetRuleRequest) returns (common.GuardrailRule) {
+    option (google.api.http) = {get: "/v1/rules/{rule_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get rule";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // UpdateRule replaces an existing custom rule.
+  rpc UpdateRule(common.GuardrailRule) returns (common.GuardrailRule) {
+    option (google.api.http) = {
+      put: "/v1/rules/{rule_id}"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Update custom rule";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // SetRuleEnabled enables or disables one rule (the only mutation allowed on
+  // built-in rules).
+  rpc SetRuleEnabled(contracts.SetRuleEnabledRequest) returns (common.GuardrailRule) {
+    option (google.api.http) = {
+      patch: "/v1/rules/{rule_id}"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Enable or disable a rule";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // BulkSetRulesEnabled enables or disables many rules in one best-effort call.
+  rpc BulkSetRulesEnabled(contracts.BulkSetRulesEnabledRequest) returns (contracts.BulkSetRulesEnabledResponse) {
+    option (google.api.http) = {
+      patch: "/v1/rules"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Bulk enable or disable rules";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // DeleteRule removes a custom rule by ID.
+  rpc DeleteRule(contracts.DeleteRuleRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/v1/rules/{rule_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Delete custom rule";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // GetSettings reads the global guardrails settings.
+  rpc GetSettings(contracts.GetSettingsRequest) returns (common.GuardrailsSettings) {
+    option (google.api.http) = {get: "/v1/settings"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get global settings";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // UpdateSettings replaces the global guardrails settings.
+  rpc UpdateSettings(common.GuardrailsSettings) returns (common.GuardrailsSettings) {
+    option (google.api.http) = {
+      put: "/v1/settings"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Update global settings";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // GetDataTypes lists the toggleable data-type groups plus CUSTOM.
+  rpc GetDataTypes(contracts.GetDataTypesRequest) returns (contracts.GetDataTypesResponse) {
+    option (google.api.http) = {get: "/v1/data-types"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List data types";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // Scan runs a dry-run masking check on sample text(s).
+  rpc Scan(contracts.ScanRequest) returns (contracts.ScanResponse) {
+    option (google.api.http) = {
+      post: "/v1/scan"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Dry-run masking scan";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // ListAuditRecords lists masking audit records (audit trail must be enabled).
+  rpc ListAuditRecords(contracts.ListAuditRecordsRequest) returns (contracts.ListAuditRecordsResponse) {
+    option (google.api.http) = {get: "/v1/audit/records"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List audit records";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // GetAuditRecord reads one masking audit record by request ID.
+  rpc GetAuditRecord(contracts.GetAuditRecordRequest) returns (common.AuditRecord) {
+    option (google.api.http) = {get: "/v1/audit/records/{request_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get audit record";
+      tags: ["Guardrails"];
+    };
+  }
+
+  // GetVersion reports the service build identity and live masking mode.
+  rpc GetVersion(contracts.GetVersionRequest) returns (contracts.GetVersionResponse) {
+    option (google.api.http) = {get: "/v1/version"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get version";
+      tags: ["Guardrails"];
+    };
+  }
+}
