@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260709200747-435963d16310.1
 	buf.build/go/protovalidate v1.2.0
-	github.com/caarlos0/env/v11 v11.3.1
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/goccy/go-yaml v1.18.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
