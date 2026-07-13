@@ -19,7 +19,7 @@ require (
 	go.uber.org/mock v0.6.0
 	go.uber.org/multierr v1.11.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260706201446-f0a921348800
-	google.golang.org/grpc v1.81.0
+	google.golang.org/grpc v1.82.0
 )
 
 require (
