@@ -159,26 +159,26 @@ bash demo.sh                   # шлёт промпты с фейковыми e
 | | Форм-фактор | Drop-in прокси | Маскирование → LLM | Оригиналы в ответе | Оригиналы в SSE-стриме | Self-hosted | Лицензия |
 |---|---|:--:|:--:|:--:|:--:|:--:|---|
 | **guardrails-llm-filter** | прокси, один Go-бинарь | ✅ | ✅ | ✅ | ✅ | ✅ | Apache-2.0 |
-| [LiteLLM Proxy](https://docs.litellm.ai/docs/proxy/guardrails/pii_masking_v2) + Presidio | шлюз (Python) + 2 контейнера Presidio | ✅ | ✅ | ⚠️¹ | ⚠️ | ✅ | MIT² |
-| [Kong AI Gateway](https://docs.konghq.com/hub/kong-inc/ai-sanitizer/) | шлюз + отдельный PII-сервис | ✅ | ✅ | ⚠️³ | ❌ | ✅ | Enterprise |
-| [Portkey AI Gateway](https://portkey.ai/docs/product/guardrails) | шлюз (TypeScript) | ✅ | ✅ | ❌⁴ | ❌ | ✅ | MIT |
-| [NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) | фреймворк рельс (Python) | ⚠️ | ⚠️⁵ | ❌ | ❌ | ✅ | Apache-2.0 |
-| [LLM Guard](https://github.com/protectai/llm-guard) | Python-библиотека + API | ❌ | ✅ | ✅ | ❌ | ✅ | MIT⁶ |
-| [Presidio](https://microsoft.github.io/presidio/) | библиотека/REST-сервисы детекции | ❌ | ✅ | ⚠️⁷ | ❌ | ✅ | MIT |
+| [LiteLLM Proxy](https://docs.litellm.ai/docs/proxy/guardrails/pii_masking_v2) + Presidio | шлюз (Python) + 2 контейнера Presidio | ✅ | ✅ | ⚠️[^1] | ⚠️ | ✅ | MIT[^2] |
+| [Kong AI Gateway](https://docs.konghq.com/hub/kong-inc/ai-sanitizer/) | шлюз + отдельный PII-сервис | ✅ | ✅ | ⚠️[^3] | ❌ | ✅ | Enterprise |
+| [Portkey AI Gateway](https://portkey.ai/docs/product/guardrails) | шлюз (TypeScript) | ✅ | ✅ | ❌[^4] | ❌ | ✅ | MIT |
+| [NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails) | фреймворк рельс (Python) | ⚠️ | ⚠️[^5] | ❌ | ❌ | ✅ | Apache-2.0 |
+| [LLM Guard](https://github.com/protectai/llm-guard) | Python-библиотека + API | ❌ | ✅ | ✅ | ❌ | ✅ | MIT[^6] |
+| [Presidio](https://microsoft.github.io/presidio/) | библиотека/REST-сервисы детекции | ❌ | ✅ | ⚠️[^7] | ❌ | ✅ | MIT |
 | [AWS Bedrock Guardrails](https://aws.amazon.com/bedrock/guardrails/) | managed-фича AWS | ❌ | ✅ | ❌ | ❌ | ❌ | проприетарно |
 
-<sup>¹ `output_parse_pii` восстанавливает по карте вида `<PERSON>` — повторные
-сущности одного типа могут коллизировать; стриминг — частично.
-² Ядро MIT, часть guardrail-функций — в платном enterprise-каталоге.
-³ `recover_redacted` восстанавливает только значения из запроса; response-фаза
-плагинов несовместима со стримингом.
-⁴ Документация Portkey: «redaction is irreversible by design».
-⁵ Маскирование label-плейсхолдерами (`[FIRST_NAME]`) через Presidio/GLiNER, без
-карты восстановления.
-⁶ Репозиторий архивирован в июле 2026 (после поглощения Protect AI компанией
-Palo Alto Networks).
-⁷ Деанонимизация только для оператора `encrypt` (AES) — расшифровка, а не
-восстановление плейсхолдеров.</sup>
+[^1]: `output_parse_pii` восстанавливает по карте вида `<PERSON>` — повторные
+    сущности одного типа могут коллизировать; стриминг — частично.
+[^2]: Ядро MIT, часть guardrail-функций — в платном enterprise-каталоге.
+[^3]: `recover_redacted` восстанавливает только значения из запроса;
+    response-фаза плагинов несовместима со стримингом.
+[^4]: Документация Portkey: «redaction is irreversible by design».
+[^5]: Маскирование label-плейсхолдерами (`[FIRST_NAME]`) через Presidio/GLiNER,
+    без карты восстановления.
+[^6]: Репозиторий архивирован в июле 2026 (после поглощения Protect AI компанией
+    Palo Alto Networks).
+[^7]: Деанонимизация только для оператора `encrypt` (AES) — расшифровка, а не
+    восстановление плейсхолдеров.
 
 Отличия, которые не влезли в таблицу: детекция здесь — **regex + валидаторы
 контрольных сумм** (Luhn, СНИЛС, ИНН, ОГРН, IBAN) без ML-инференса на data-path —
