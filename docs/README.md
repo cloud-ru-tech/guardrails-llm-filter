@@ -12,12 +12,8 @@
 | [storage/](storage/) | Абстракция хранилища, четыре роли одного бэкенда, TTL и модель безопасности, бэкенды |
 | [api/](api/) | Management API (gRPC + grpc-gateway REST) и встроенная веб-консоль: эндпоинты, DTO, коды ошибок, аутентификация |
 | [operations/](operations/) | Порты, метрики, алерты, дашборд, деплой, чеклист безопасности, режимы отказа |
+| [monitoring/](monitoring/) | Пошаговое подключение Prometheus и Grafana, готовые алерты, пример дашборда |
 | [development/](development/) | Сборка/тесты/линт, стратегия тестирования, генерируемые файлы, демо |
-
-Для удобства в корне `docs/` есть плоские алиасы-симлинки на входной файл каждого
-раздела: [architecture.md](architecture.md), [configuration.md](configuration.md),
-[rules-engine.md](rules-engine.md), [storage.md](storage.md), [api.md](api.md),
-[operations.md](operations.md), [development.md](development.md).
 
 ## Коротко о сервисе
 

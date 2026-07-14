@@ -5,13 +5,13 @@ import { FieldSelect, FieldText, FieldTextArea } from '@snack-uikit/fields';
 import { CrossSVG, PlaySVG } from '@snack-uikit/icons';
 import { toaster } from '@snack-uikit/toaster';
 import { Typography } from '@snack-uikit/typography';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ApiRequestError } from '@/api/client';
 import { useCreateRule, useScan, useUpdateRule } from '@/api/hooks';
 import type { Rule } from '@/api/types';
 import { ScanResultPanel } from '@/components/ScanResultPanel';
-import { DATA_TYPE_NAME, RULE_ID_PATTERN, VALIDATORS } from '@/domain/dataTypes';
+import { CHART_COLOR, DATA_TYPE_NAME, RULE_ID_PATTERN, VALIDATORS } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import styles from './RuleFormDrawer.module.scss';
@@ -49,6 +49,15 @@ const csvToList = (s: string) =>
 
 const listToCsv = (l?: (string | number)[]) => (l ?? []).join(', ');
 
+/** Colored entity dot — rendered only next to the type's text label. */
+const entityDot = (id: number) => (
+  <span
+    className={styles.entityDot}
+    style={{ background: CHART_COLOR[id] ?? 'var(--sys-neutral-text-support)' }}
+    aria-hidden="true"
+  />
+);
+
 function toForm(rule?: Rule): FormState {
   return {
     ruleId: rule?.rule_id ?? '',
@@ -80,6 +89,12 @@ export function RuleFormDrawer({ open, onClose, rule, dataTypeOptions }: Props) 
 
   const dtLabel = (id: number) =>
     dataTypeOptions.find((o) => o.value === id)?.option ?? DATA_TYPE_NAME[id] ?? String(id);
+
+  // Entity dot next to each option label in the droplist.
+  const entityOptions = useMemo(
+    () => dataTypeOptions.map((o) => ({ ...o, beforeContent: entityDot(o.value) })),
+    [dataTypeOptions],
+  );
 
   // Reset the form whenever the drawer (re)opens for a different rule.
   useEffect(() => {
@@ -163,7 +178,7 @@ export function RuleFormDrawer({ open, onClose, rule, dataTypeOptions }: Props) 
         : null;
 
   return (
-    <DrawerCustom open={open} onClose={onClose} size="560px">
+    <DrawerCustom open={open} onClose={onClose} size="min(560px, 100vw)">
       <div className={styles.drawer}>
         <div className={styles.header}>
           <Typography family="sans" purpose="title" size="s" tag="h2">
@@ -175,111 +190,128 @@ export function RuleFormDrawer({ open, onClose, rule, dataTypeOptions }: Props) 
         <div className={styles.body}>
           {error && <Alert appearance="error" icon description={error} />}
 
-          <div className={styles.grid2}>
-            <FieldText
-              label={t.rules.form.ruleId}
-              inputMode="text"
-              hint={fieldErrors.ruleId ?? t.rules.form.ruleIdHint}
-              validationState={fieldErrors.ruleId ? 'error' : 'default'}
-              value={form.ruleId}
-              onChange={(v) => set('ruleId', v)}
-              disabled={isEdit}
-              required
-            />
-            <FieldText
-              label={t.rules.form.name}
-              inputMode="text"
-              value={form.name}
-              onChange={(v) => set('name', v)}
-              required
-            />
-          </div>
+          <section className={styles.section}>
+            <span className={styles.sectionTitle}>{t.rules.form.sectionMain}</span>
+            <div className={styles.grid2}>
+              <FieldText
+                className={styles.monoField}
+                label={t.rules.form.ruleId}
+                inputMode="text"
+                hint={fieldErrors.ruleId ?? t.rules.form.ruleIdHint}
+                validationState={fieldErrors.ruleId ? 'error' : 'default'}
+                value={form.ruleId}
+                onChange={(v) => set('ruleId', v)}
+                disabled={isEdit}
+                required
+              />
+              <FieldText
+                label={t.rules.form.name}
+                inputMode="text"
+                value={form.name}
+                onChange={(v) => set('name', v)}
+                required
+              />
+            </div>
 
-          <div className={styles.grid2}>
-            <FieldText
-              label={t.rules.form.group}
-              inputMode="text"
-              value={form.group}
-              onChange={(v) => set('group', v)}
-            />
-            <FieldSelect
-              selection="single"
-              label={t.rules.form.dataType}
-              options={dataTypeOptions}
-              value={form.dataType}
-              onChange={(v) => set('dataType', v == null ? undefined : Number(v))}
-              required
-            />
-          </div>
+            <div className={styles.grid2}>
+              <FieldText
+                label={t.rules.form.group}
+                inputMode="text"
+                value={form.group}
+                onChange={(v) => set('group', v)}
+              />
+              <FieldSelect
+                selection="single"
+                label={t.rules.form.dataType}
+                options={entityOptions}
+                prefix={form.dataType != null ? entityDot(form.dataType) : undefined}
+                value={form.dataType}
+                onChange={(v) => set('dataType', v == null ? undefined : Number(v))}
+                required
+              />
+            </div>
+          </section>
 
-          <FieldTextArea
-            label={t.rules.form.regex}
-            value={form.regex}
-            onChange={(v) => set('regex', v)}
-            required
-          />
-
-          <FieldText
-            label={t.rules.form.keywords}
-            inputMode="text"
-            hint={t.rules.form.keywordsHint}
-            value={form.keywords}
-            onChange={(v) => set('keywords', v)}
-          />
-
-          <FieldSelect
-            selection="multiple"
-            label={t.rules.form.validators}
-            options={VALIDATORS.map((v) => ({ value: v, option: v }))}
-            value={form.validators}
-            onChange={(v) => set('validators', (v ?? []).map(String))}
-          />
-
-          <div className={styles.grid2}>
-            <FieldText
-              label={t.rules.form.minLength}
-              inputMode="numeric"
-              value={form.minLength}
-              onChange={(v) => set('minLength', v)}
-            />
-            <FieldText
-              label={t.rules.form.entropy}
-              inputMode="decimal"
-              value={form.entropy}
-              onChange={(v) => set('entropy', v)}
-            />
-          </div>
-
-          <FieldText
-            label={t.rules.form.banlist}
-            inputMode="text"
-            hint={t.rules.form.banlistHint}
-            value={form.banlist}
-            onChange={(v) => set('banlist', v)}
-          />
-
-          <div className={styles.grid2}>
-            <FieldText
-              label={t.rules.form.placeholder}
-              inputMode="text"
-              hint={t.rules.form.placeholderHint}
-              value={form.placeholder}
-              onChange={(v) => set('placeholder', v)}
-            />
-            <FieldText
-              label={t.rules.form.captureGroups}
-              hint={t.rules.form.captureGroupsHint}
-              inputMode="numeric"
-              value={form.captureGroups}
-              onChange={(v) => set('captureGroups', v)}
-            />
-          </div>
-
-          <div className={styles.testSection}>
-            <Typography family="sans" purpose="label" size="s" tag="span" className={styles.testTitle}>
-              {t.rules.test.title}
-            </Typography>
+          <section className={styles.section}>
+            <span className={styles.sectionTitle}>{t.rules.form.sectionDetection}</span>
             <FieldTextArea
+              className={styles.monoField}
+              label={t.rules.form.regex}
+              value={form.regex}
+              onChange={(v) => set('regex', v)}
+              required
+            />
+
+            <FieldText
+              className={styles.monoField}
+              label={t.rules.form.keywords}
+              inputMode="text"
+              hint={t.rules.form.keywordsHint}
+              value={form.keywords}
+              onChange={(v) => set('keywords', v)}
+            />
+
+            <FieldSelect
+              selection="multiple"
+              label={t.rules.form.validators}
+              options={VALIDATORS.map((v) => ({ value: v, option: v }))}
+              value={form.validators}
+              onChange={(v) => set('validators', (v ?? []).map(String))}
+            />
+
+            <div className={styles.grid2}>
+              <FieldText
+                className={styles.monoField}
+                label={t.rules.form.minLength}
+                inputMode="numeric"
+                value={form.minLength}
+                onChange={(v) => set('minLength', v)}
+              />
+              <FieldText
+                className={styles.monoField}
+                label={t.rules.form.entropy}
+                inputMode="decimal"
+                value={form.entropy}
+                onChange={(v) => set('entropy', v)}
+              />
+            </div>
+
+            <FieldText
+              className={styles.monoField}
+              label={t.rules.form.banlist}
+              inputMode="text"
+              hint={t.rules.form.banlistHint}
+              value={form.banlist}
+              onChange={(v) => set('banlist', v)}
+            />
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionTitle}>{t.rules.form.sectionMasking}</span>
+            <div className={styles.grid2}>
+              <FieldText
+                className={styles.monoField}
+                label={t.rules.form.placeholder}
+                inputMode="text"
+                hint={t.rules.form.placeholderHint}
+                value={form.placeholder}
+                onChange={(v) => set('placeholder', v)}
+              />
+              <FieldText
+                className={styles.monoField}
+                label={t.rules.form.captureGroups}
+                hint={t.rules.form.captureGroupsHint}
+                inputMode="numeric"
+                value={form.captureGroups}
+                onChange={(v) => set('captureGroups', v)}
+              />
+            </div>
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionTitle}>{t.rules.test.title}</span>
+            <FieldTextArea
+              className={styles.monoField}
               label={t.rules.test.sample}
               placeholder={t.rules.test.samplePlaceholder}
               value={sample}
@@ -297,7 +329,7 @@ export function RuleFormDrawer({ open, onClose, rule, dataTypeOptions }: Props) 
             </div>
             {testError && <Alert appearance="error" icon description={testError} />}
             {scan.data && !testError && <ScanResultPanel result={scan.data} dtLabel={dtLabel} />}
-          </div>
+          </section>
         </div>
 
         <div className={styles.footer}>

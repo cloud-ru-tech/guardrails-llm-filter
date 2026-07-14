@@ -3,7 +3,7 @@
 
 export const t = {
   app: {
-    title: 'Cloud.ru Guardrails',
+    title: 'Guardrails',
     subtitle: 'LLM-фильтр',
   },
   nav: {
@@ -12,6 +12,7 @@ export const t = {
     tester: 'Песочница',
     settings: 'Настройки',
     audit: 'Аудит',
+    monitoring: 'Мониторинг',
   },
   status: {
     healthy: 'Сервис доступен',
@@ -20,6 +21,7 @@ export const t = {
     topology: 'Топология',
     store: 'Хранилище',
     unknown: 'неизвестно',
+    modeDetectHint: 'Detect: трафик сканируется, но не маскируется',
   },
   theme: {
     toggle: 'Сменить тему',
@@ -84,6 +86,31 @@ export const t = {
       topDataTypes: 'Топ типов данных (за всё время)',
       empty: 'Метрики пока не накоплены.',
     },
+    hero: {
+      eyebrowLifetime: 'За всё время',
+      eyebrowWindow: (n: number) => `По последним ${n} записям`,
+      masked: 'Замаскировано запросов',
+      enforce: 'enforce',
+      detect: 'detect',
+      p50: 'p50',
+      p95: 'p95',
+      passthrough: 'Пропущено',
+      replacements: 'Замен всего',
+      subMs: '<1 мс',
+      ms: (n: number) => `${n} мс`,
+      latencyBucket: (bucket: string) => `Бакет: ${bucket}`,
+      noTraffic: 'Нет данных — не было трафика',
+      noMetrics: 'Метрики недоступны',
+    },
+    section: {
+      auditWindow: (n: number) => `Последние ${n} записей аудита`,
+      dataTypes: 'Типы данных',
+      dynamics: 'Динамика',
+      recent: 'Последние срабатывания',
+      fullAudit: 'Весь журнал →',
+      noReplacements: 'без замен',
+      noData: 'Нет данных.',
+    },
   },
   rules: {
     title: 'Правила детекции',
@@ -101,11 +128,20 @@ export const t = {
       ruleId: 'ID',
       name: 'Название',
       group: 'Группа',
+      rule: 'Правило',
       dataType: 'Тип данных',
       source: 'Источник',
       enabled: 'Активно',
       actions: 'Действия',
     },
+    counter: (n: number) => {
+      const m10 = n % 10;
+      const m100 = n % 100;
+      const word =
+        m100 >= 11 && m100 <= 14 ? 'правил' : m10 === 1 ? 'правило' : m10 >= 2 && m10 <= 4 ? 'правила' : 'правил';
+      return `${n} ${word}`;
+    },
+    bulkSelectedLabel: 'Выбрано',
     sourceBuiltinBadge: 'встроенное',
     sourceCustomBadge: 'пользовательское',
     enableError: 'Не удалось изменить состояние правила',
@@ -144,6 +180,9 @@ export const t = {
     form: {
       createTitle: 'Новое правило',
       editTitle: 'Редактирование правила',
+      sectionMain: 'Основное',
+      sectionDetection: 'Детекция',
+      sectionMasking: 'Маскирование',
       ruleId: 'ID правила',
       ruleIdHint: 'Латиница в нижнем регистре, цифры, «_», «.», «-» (до 128 символов).',
       name: 'Название',
@@ -178,6 +217,25 @@ export const t = {
     scanError: 'Не удалось выполнить сканирование',
     empty: 'Введите текст и нажмите «Сканировать».',
     noMatches: 'Совпадений не найдено.',
+    resultTitle: 'Результат',
+    examplesLabel: 'Примеры',
+    emptyTitle: 'Здесь появится результат',
+    emptyHint: 'Вставьте текст слева и нажмите «Сканировать». Быстрый старт — чипы-примеры над полем ввода.',
+    staleResult: 'Показан последний успешный результат',
+    samples: [
+      {
+        label: 'email + карта',
+        text: 'Добрый день! Продублируйте, пожалуйста, чек об оплате на почту ivan.petrov84@example.com. Платёж прошёл с карты 4276 5500 1234 5677, если нужен возврат — реквизиты те же.',
+      },
+      {
+        label: 'DSN + пароль',
+        text: 'Воркер биллинга падает после деплоя. DSN прода: postgres://billing_app:Sup3rSecret_2024@db-prod-01.internal:5432/billing — подключение проходит, но миграции не стартуют. Логи дублируются в https://svc_logger:Tr0ub4dor_77@logs.internal/ingest, доступ по тому же паролю.',
+      },
+      {
+        label: 'СНИЛС + телефон',
+        text: 'Заявка на пропуск: Смирнова Анна Сергеевна, СНИЛС 112-233-445 95, контактный телефон +7 912 345-67-89. Дата визита — 15 июля, сопровождающий не требуется.',
+      },
+    ],
     result: {
       masked: 'Маскированный текст',
       triggeredRules: 'Сработавшие правила',
@@ -186,6 +244,8 @@ export const t = {
       phPlaceholder: 'Плейсхолдер',
       phOriginal: 'Оригинал',
       phRule: 'Правило',
+      noMatchesCount: '0 срабатываний',
+      noMatchesText: 'текст прошёл без изменений',
       timing: (ms: number) => `Время: ${ms} мс`,
     },
   },
@@ -203,6 +263,13 @@ export const t = {
     saved: 'Настройки сохранены',
     saveError: 'Не удалось сохранить настройки',
     modeResetWarning: 'Сохранение заменяет весь документ настроек. Режим по умолчанию — Enforce.',
+    sectionMasking: 'Маскирование',
+    modeEnforceDesc: 'Найденные значения заменяются плейсхолдерами до передачи запроса модели.',
+    modeDetectDesc: 'Теневой режим: только сканирует и пишет метрики и аудит, тело запроса не изменяется.',
+    modeDetectConsequence: 'трафик проходит без маскирования',
+    confirmDisable: 'Выключить маскирование? Весь трафик будет проходить без обработки.',
+    confirmDetect: 'Переключить режим на Detect? Срабатывания будут записываться, но трафик пройдёт без маскирования.',
+    unsavedChanges: 'Есть несохранённые изменения',
   },
   audit: {
     title: 'Журнал аудита',
@@ -218,6 +285,7 @@ export const t = {
       mode: 'Режим',
       rules: 'Правила',
       dataTypes: 'Типы данных',
+      replacements: 'Замены',
     },
     filter: {
       model: 'Модель',
@@ -227,6 +295,22 @@ export const t = {
       since: 'С (RFC3339)',
       until: 'По (RFC3339)',
     },
+    range: {
+      label: 'Период',
+      h1: '1 ч',
+      h24: '24 ч',
+      d7: '7 дн',
+      all: 'всё',
+    },
+    modeFilter: {
+      label: 'Режим',
+      all: 'Все режимы',
+    },
+    sinceShort: 'С',
+    untilShort: 'По',
+    rfc3339Title: 'RFC3339 (UTC), например 2026-01-01T00:00:00Z',
+    detectHint: 'Записано в режиме detect: трафик сканировался, но не маскировался',
+    dataTypesAll: 'Все типы данных',
     detail: {
       title: 'Запись аудита',
       requestId: 'Request ID',
@@ -242,6 +326,72 @@ export const t = {
       replRule: 'Правило',
       replDataType: 'Тип',
       replPlaceholder: 'Плейсхолдер',
+    },
+  },
+  monitoring: {
+    title: 'Мониторинг',
+    description:
+      'Состояние сервиса, накопительные счётчики и подключение внешнего мониторинга (Prometheus + Grafana).',
+    refresh: 'Обновить',
+    hookupSection: 'Внешний мониторинг',
+    status: {
+      section: 'Состояние сервиса',
+      health: 'Доступность',
+      healthy: 'доступен',
+      unhealthy: 'недоступен',
+      mode: 'Режим',
+      store: 'Хранилище',
+      topology: 'Топология',
+      version: 'Версия',
+      commit: 'Коммит',
+    },
+    counters: {
+      section: 'Счётчики за всё время',
+      sectionHint: 'Живые агрегаты Prometheus-счётчиков сервиса — без внешнего стека.',
+      masked: 'Замаскировано запросов',
+      enforce: 'enforce',
+      detect: 'detect',
+      passthrough: 'Пропущено без обработки',
+      passthroughHint:
+        'Fail-open события: запрос ушёл к провайдеру без маскирования. Рост — сигнал тревоги.',
+      ptUnguardedPath: 'Незащищённый путь',
+      ptUnknownFormat: 'Неизвестный формат',
+      ptUnsupportedSchema: 'Неподдерживаемая схема',
+      latency: 'Задержки этапов',
+      latencyHint: 'Квантили приблизительные — интерполяция по бакетам гистограмм.',
+      latencyStage: 'Этап',
+      latencyCount: 'Замеров',
+      stagePipeline: 'pipeline (маска + демаска)',
+      stageMask: 'mask (запрос)',
+      stageDemask: 'demask (ответ)',
+      topRules: 'Топ правил',
+      topDataTypes: 'Топ типов данных',
+      empty: 'Счётчики пока не накоплены — прогоните трафик через :8080.',
+      unavailable: 'Сводка метрик недоступна.',
+    },
+    prometheus: {
+      section: 'Подключение Prometheus',
+      sectionHint:
+        'Сервис отдаёт метрики в формате Prometheus на отдельном порту — GUARDRAILS_METRICS_PORT (по умолчанию 9090), путь /metrics, namespace extproc_guardrails_.',
+      scrapeTitle: 'Фрагмент prometheus.yml',
+      copy: 'Скопировать',
+      copied: 'Скопировано',
+      alertsTitle: 'Готовые алерты',
+      alertsHint:
+        'Правила алертинга (fail-open маскирование, ошибки демаскирования, недоступность скрейпа) лежат в репозитории:',
+      alertsK8s: 'для prometheus-operator — PrometheusRule в',
+      metricsDoc: 'Справочник всех метрик — docs/operations.md.',
+    },
+    grafana: {
+      section: 'Дашборд Grafana',
+      sectionHint:
+        'Готовый дашборд: трафик и срабатывания, задержки этапов, fail-open ошибки, здоровье gRPC.',
+      importTitle: 'Как подключить',
+      step1: 'Добавьте Prometheus как data source в Grafana (Connections → Data sources).',
+      step2: 'Dashboards → New → Import.',
+      step3: 'Загрузите JSON из репозитория:',
+      step4: 'Выберите ваш Prometheus data source и нажмите Import.',
+      docHint: 'Пошаговая инструкция с примерами — docs/monitoring.',
     },
   },
 } as const;

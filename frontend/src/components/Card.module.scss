@@ -15,6 +15,23 @@
   gap: 12px;
 }
 
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+// The one ALL-CAPS role in the system: a mono context label above the title.
+.eyebrow {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sys-neutral-text-support);
+}
+
 .subtitle {
   color: var(--sys-neutral-text-support);
 }

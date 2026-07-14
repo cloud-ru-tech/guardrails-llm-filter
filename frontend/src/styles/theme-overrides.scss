@@ -71,29 +71,34 @@ $type-ramp: (
   }
 }
 
-// Categorical chart palette — accessible marks that harmonize with the Cloud.ru
-// brand green, keyed to data-type ids. Grid/axis reuse neutral tokens so charts
-// stay theme-aware automatically.
+// Entity (data-type) palette — snapped to the snack-uikit ref ramps (orange /
+// yellow / pink / blue / violet / green families), then machine-validated with
+// the dataviz six-checks script in BOTH modes (lightness band, chroma floor,
+// adjacent-pair CVD ΔE, ≥3:1 contrast vs surface). Two slots are chroma-boosted
+// off their nearest ramp step because no stock step passes the checks. Red is
+// deliberately absent: it is reserved for errors — an entity must never look
+// like a failure state. Rule of use: an entity color never appears without a
+// text label beside it (the worst adjacent CVD pair sits in the 8–12 floor
+// band, which is legal only with secondary encoding).
 .gr-theme {
   --chart-grid: var(--sys-neutral-decor-default);
   --chart-axis: var(--sys-neutral-text-support);
-  --chart-primary: #30a46c;
-  --chart-dt-1: #e5484d; // CREDENTIALS
-  --chart-dt-2: #f76b15; // API_KEYS
-  --chart-dt-3: #d9822b; // ACCESS_TOKENS
-  --chart-dt-4: #3b82f6; // IP_ADDRESSES
-  --chart-dt-5: #8e4ec6; // PERSONAL_DATA
-  --chart-dt-6: #80838d; // CUSTOM
+  --chart-primary: var(--sys-primary-accent-default);
+  --chart-dt-1: #995527; // CREDENTIALS (orange-40)
+  --chart-dt-2: #b78c32; // API_KEYS (yellow-45)
+  --chart-dt-3: #ae5e80; // ACCESS_TOKENS (pink-45)
+  --chart-dt-4: #2f62a6; // IP_ADDRESSES (blue-40, chroma+)
+  --chart-dt-5: #aa6cc1; // PERSONAL_DATA (violet-55)
+  --chart-dt-6: #55915a; // CUSTOM (green-45)
 }
 
 .gr-theme[data-theme='dark'] {
-  --chart-primary: #3dd68c;
-  --chart-dt-1: #ff6369;
-  --chart-dt-2: #ff8b3e;
-  --chart-dt-3: #f0c000;
-  --chart-dt-4: #5eb0ef;
-  --chart-dt-5: #bf7af0;
-  --chart-dt-6: #a1a1aa;
+  --chart-dt-1: #bb733e; // orange-45
+  --chart-dt-2: #b78c32; // yellow-45
+  --chart-dt-3: #c06088; // pink-50
+  --chart-dt-4: #3a71b8; // blue-45, chroma+
+  --chart-dt-5: #ab7ecd; // violet-60, darkened into band
+  --chart-dt-6: #55a25c; // green-50
 }
 
 // Separators & surfaces. The stock `--sys-neutral-decor-default` border is nearly

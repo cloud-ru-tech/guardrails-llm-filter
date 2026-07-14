@@ -1,7 +1,8 @@
-import { Alert } from '@snack-uikit/alert';
-import { ButtonFilled } from '@snack-uikit/button';
+import { ButtonFilled, ButtonOutline } from '@snack-uikit/button';
+import { Card } from '@snack-uikit/card';
+import { Divider } from '@snack-uikit/divider';
 import { FieldSelect } from '@snack-uikit/fields';
-import { SegmentedControl } from '@snack-uikit/segmented-control';
+import { EyeClosedSVG, FilterSVG, FunctionSettingsSVG } from '@snack-uikit/icons';
 import { toaster } from '@snack-uikit/toaster';
 import { Switch } from '@snack-uikit/toggles';
 import { Typography } from '@snack-uikit/typography';
@@ -12,12 +13,65 @@ import { useDataTypes, useSettings, useUpdateSettings } from '@/api/hooks';
 import type { Settings } from '@/api/types';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryBoundary } from '@/components/QueryBoundary';
-import { DATA_TYPE_NAME } from '@/domain/dataTypes';
+import { CHART_COLOR, DATA_TYPE_NAME } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import styles from './SettingsPage.module.scss';
 
 type Mode = 'enforce' | 'detect';
+
+function normalizeMode(mode: string | undefined | null): Mode {
+  return mode === 'detect' ? 'detect' : 'enforce';
+}
+
+/** Order-insensitive fingerprint of a data-type selection for dirty checking. */
+function typesKey(types: number[]): string {
+  return [...types].sort((a, b) => a - b).join(',');
+}
+
+/**
+ * One mode option: a snack-uikit selection Card (outline + checked) — the DS's
+ * native "выбран/не выбран" pattern. The Card handles click and keyboard;
+ * radio semantics are provided via aria attributes on the group and cards.
+ */
+function ModeTile({
+  checked,
+  title,
+  description,
+  consequence,
+  onSelect,
+}: {
+  checked: boolean;
+  title: string;
+  description: string;
+  /** Amber protection-consequence line (detect only). */
+  consequence?: string;
+  onSelect: () => void;
+}) {
+  return (
+    <Card
+      outline
+      size="s"
+      checked={checked}
+      onClick={onSelect}
+      className={styles.modeCard}
+      aria-checked={checked}
+      header={<Card.Header title={title} description={description} truncate={{ description: 4 }} />}
+    >
+      {consequence && (
+        <Typography
+          family="sans"
+          purpose="body"
+          size="s"
+          tag="span"
+          className={styles.modeTileConsequence}
+        >
+          {consequence}
+        </Typography>
+      )}
+    </Card>
+  );
+}
 
 export function SettingsPage() {
   const settingsQuery = useSettings();
@@ -33,21 +87,62 @@ export function SettingsPage() {
     const s = settingsQuery.data;
     if (!s) return;
     setEnabled(Boolean(s.enabled));
-    setMode(s.mode === 'detect' ? 'detect' : 'enforce');
+    setMode(normalizeMode(s.mode));
     setDataTypes((s.data_types ?? []).map(Number));
   }, [settingsQuery.data]);
 
   const options = useMemo(
     () =>
-      (dataTypesQuery.data ?? []).map((dt) => ({
-        value: Number(dt.data_type),
-        option: dt.display_name || dt.name || DATA_TYPE_NAME[Number(dt.data_type)] || String(dt.data_type),
-        description: dt.description,
-      })),
+      (dataTypesQuery.data ?? []).map((dt) => {
+        const id = Number(dt.data_type);
+        return {
+          value: id,
+          option: dt.display_name || dt.name || DATA_TYPE_NAME[id] || String(dt.data_type),
+          description: dt.description,
+          // Entity dot in the droplist row; the option text is its mandatory label.
+          beforeContent: (
+            <span
+              className={styles.optionDot}
+              style={{ background: CHART_COLOR[id] ?? 'var(--sys-neutral-text-support)' }}
+              aria-hidden="true"
+            />
+          ),
+        };
+      }),
     [dataTypesQuery.data],
   );
 
+  // Save stays disabled until the form actually diverges from the loaded settings.
+  const dirty = useMemo(() => {
+    const s = settingsQuery.data;
+    if (!s) return false;
+    return (
+      Boolean(s.enabled) !== enabled ||
+      normalizeMode(s.mode) !== mode ||
+      typesKey((s.data_types ?? []).map(Number)) !== typesKey(dataTypes)
+    );
+  }, [settingsQuery.data, enabled, mode, dataTypes]);
+
+  // «Отмена» rolls the form back to the last loaded server state.
+  const handleReset = () => {
+    const s = settingsQuery.data;
+    if (!s) return;
+    setEnabled(Boolean(s.enabled));
+    setMode(normalizeMode(s.mode));
+    setDataTypes((s.data_types ?? []).map(Number));
+  };
+
   const handleSave = () => {
+    const saved = settingsQuery.data;
+    if (saved) {
+      // Confirm ONLY when the pending change reduces protection.
+      const turningOff = Boolean(saved.enabled) && !enabled;
+      const droppingToDetect = normalizeMode(saved.mode) === 'enforce' && mode === 'detect';
+      if (turningOff || droppingToDetect) {
+        const message = turningOff ? t.settings.confirmDisable : t.settings.confirmDetect;
+        if (!window.confirm(message)) return;
+      }
+    }
     const body: Settings = { enabled, data_types: dataTypes, mode };
     updateSettings.mutate(body, {
       onSuccess: () => toaster.userAction.success({ label: t.settings.saved }),
@@ -69,13 +164,105 @@ export function SettingsPage() {
         error={settingsQuery.error}
         onRetry={() => settingsQuery.refetch()}
       >
-        <div className={styles.card}>
-          <div className={styles.rowInline}>
-            <Switch checked={enabled} onChange={setEnabled} />
-            <div className={styles.row}>
+        <form
+          className={styles.form}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSave();
+          }}
+        >
+          <Card
+            outline
+            size="m"
+            className={styles.sectionCard}
+            header={
+              <Card.Header
+                title={t.settings.sectionMasking}
+                description={t.settings.enabledHint}
+                emblem={{ icon: EyeClosedSVG, decor: true, appearance: 'primary', shape: 'square' }}
+              />
+            }
+          >
+            <label className={styles.switchRow}>
+              <Switch checked={enabled} onChange={setEnabled} />
               <Typography family="sans" purpose="label" size="m" tag="span">
                 {t.settings.enabled}
               </Typography>
+            </label>
+          </Card>
+
+          <Card
+            outline
+            size="m"
+            className={styles.sectionCard}
+            header={
+              <Card.Header
+                title={t.settings.mode}
+                description={t.settings.modeEnforceHint}
+                emblem={{
+                  icon: FunctionSettingsSVG,
+                  decor: true,
+                  appearance: 'primary',
+                  shape: 'square',
+                }}
+              />
+            }
+          >
+            <div className={styles.modeTiles} aria-label={t.settings.mode}>
+              <ModeTile
+                checked={mode === 'enforce'}
+                title={t.settings.modeEnforce}
+                description={t.settings.modeEnforceDesc}
+                onSelect={() => setMode('enforce')}
+              />
+              <ModeTile
+                checked={mode === 'detect'}
+                title={t.settings.modeDetect}
+                description={t.settings.modeDetectDesc}
+                consequence={t.settings.modeDetectConsequence}
+                onSelect={() => setMode('detect')}
+              />
+            </div>
+          </Card>
+
+          <Card
+            outline
+            size="m"
+            className={styles.sectionCard}
+            header={
+              <Card.Header
+                title={t.settings.dataTypes}
+                description={t.settings.dataTypesHint}
+                emblem={{ icon: FilterSVG, decor: true, appearance: 'primary', shape: 'square' }}
+              />
+            }
+          >
+            <FieldSelect
+              selection="multiple"
+              value={dataTypes}
+              onChange={(value) => setDataTypes((value ?? []).map(Number))}
+              options={options}
+              loading={dataTypesQuery.isLoading}
+            />
+          </Card>
+
+          <Divider weight="light" />
+
+          <div className={styles.formFooter}>
+            <ButtonFilled
+              type="submit"
+              label={t.common.save}
+              disabled={!dirty}
+              loading={updateSettings.isPending}
+            />
+            <ButtonOutline
+              type="button"
+              appearance="neutral"
+              label={t.common.cancel}
+              disabled={!dirty || updateSettings.isPending}
+              onClick={handleReset}
+            />
+            {dirty && (
               <Typography
                 family="sans"
                 purpose="body"
@@ -83,54 +270,11 @@ export function SettingsPage() {
                 tag="span"
                 className={styles.hint}
               >
-                {t.settings.enabledHint}
+                {t.settings.unsavedChanges}
               </Typography>
-            </div>
+            )}
           </div>
-
-          <div className={styles.row}>
-            <Typography family="sans" purpose="label" size="m" tag="span">
-              {t.settings.mode}
-            </Typography>
-            <SegmentedControl<Mode>
-              value={mode}
-              onChange={setMode}
-              items={[
-                { value: 'enforce', label: t.settings.modeEnforce },
-                { value: 'detect', label: t.settings.modeDetect },
-              ]}
-            />
-            <Typography family="sans" purpose="body" size="s" tag="span" className={styles.hint}>
-              {t.settings.modeEnforceHint}
-            </Typography>
-          </div>
-
-          <div className={styles.row}>
-            <FieldSelect
-              selection="multiple"
-              label={t.settings.dataTypes}
-              hint={t.settings.dataTypesHint}
-              value={dataTypes}
-              onChange={(value) => setDataTypes((value ?? []).map(Number))}
-              options={options}
-              loading={dataTypesQuery.isLoading}
-            />
-          </div>
-
-          <Alert
-            appearance="info"
-            icon
-            description={t.settings.modeResetWarning}
-          />
-
-          <div className={styles.footer}>
-            <ButtonFilled
-              label={t.common.save}
-              onClick={handleSave}
-              loading={updateSettings.isPending}
-            />
-          </div>
-        </div>
+        </form>
       </QueryBoundary>
     </div>
   );

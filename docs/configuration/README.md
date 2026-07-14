@@ -9,6 +9,34 @@
 Семантика резолюции настроек, модель доверия к заголовкам и логирование — в
 [settings.md](settings.md).
 
+## Резолюция настроек
+
+Три слоя: env-дефолты засевают хранилище один раз, дальше источник истины —
+хранилище (правится через API, перечитывается тикером), а override-заголовок может
+только **сузить** политику на один запрос (`internal/service/settings`):
+
+```mermaid
+flowchart TD
+    ENV["Env-дефолты<br/>GUARDRAILS_ENABLED / MODE / DATA_TYPES"] -->|"первый старт: засев<br/>(SaveSettingsIfAbsent)"| STORE["Хранилище настроек<br/>(in_memory / redis / postgres)"]
+    API["PUT /v1/settings"] -->|"запись + замена кэша"| STORE
+    STORE -->|"Load на старте,<br/>далее тикер RunRefresh"| CACHE["In-process кэш<br/>(settings.Service)"]
+    CACHE --> HDR{"Override-заголовок<br/>x-guardrails-data-types?"}
+    HDR -->|"пустой или неразбираемый"| FULL["Полная глобальная политика"]
+    HDR -->|"none"| OFF["Guardrails пропущены<br/>для этого запроса"]
+    HDR -->|"CSV типов данных"| INT["Пересечение с глобальными<br/>типами данных"]
+    INT -->|"пересечение пусто"| OFF
+    INT -->|"иначе"| NARROW["Суженная эффективная политика<br/>(mode не меняется)"]
+```
+
+Заголовок не может ничего **расширить**: типы вне глобального списка отбрасываются
+пересечением, `mode` (`enforce`/`detect`) всегда глобальный, а неразбираемое значение
+целиком игнорируется — сбой ведёт к полной защите, не к меньшей. Заголовок потребляется
+и не форвардится upstream; модель доверия — в [settings.md](settings.md).
+
+Недоступное на старте хранилище не фатально (`internal/app`): сервис поднимается на
+env-дефолтах (кастомные правила — только файловые), ошибка логируется, а тикеры
+перечитывания лечат кэш, когда стор оживёт.
+
 ## Справочник
 
 | Переменная | По умолчанию | Примечания |
@@ -20,7 +48,7 @@
 | `GUARDRAILS_METRICS_PORT` | `9090` | порт метрик Prometheus |
 | `GUARDRAILS_GRPC_ADDR` | `:9000` | management gRPC-адрес (`GuardrailsApi`); REST-API проксирует на него |
 | `GUARDRAILS_GRPC_SECURE` | `false` | self-signed TLS на management gRPC-listener (`pkg/tlsutils`); по умолчанию выкл — API рассчитан на работу внутри кластера |
-| `GUARDRAILS_UPSTREAM_BASE_URL` | — | **обязательно**: базовый URL upstream LLM-провайдера; путь запроса дописывается к нему |
+| `GUARDRAILS_UPSTREAM_BASE_URL` | — | базовый URL upstream LLM-провайдера; путь запроса дописывается к нему. **Обязателен**, если не задан `PATH_BASE_URLS` (без обоих — отказ старта). Валидируется на старте: абсолютный http(s)-URL с хостом (как и значения `PATH_BASE_URLS`) |
 | `GUARDRAILS_UPSTREAM_TIMEOUT` | `120s` | таймаут заголовков ответа upstream (время до первого байта); не ограничивает стриминговое тело; `0` отключает |
 | `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS` | `100` | пул соединений upstream: максимум idle-соединений |
 | `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | `100` | пул соединений upstream: максимум idle на хост |
@@ -31,14 +59,14 @@
 | `GUARDRAILS_MODE` | `enforce` | `detect` = shadow-режим: скан + метрики/аудит, трафик не тронут (seed-значение) |
 | `GUARDRAILS_DATA_TYPES` | `1,2,3,4,5,6` | включённые типы данных, числа или имена; `6`/CUSTOM включает кастомные правила из API — без него они молча не сканируются |
 | `GUARDRAILS_KEYWORD_PREFILTER_ENABLED` | `false` | сохраняющий полноту keyword-пре-фильтр (ускоряет скан) — см. [../rules-engine/](../rules-engine/) |
-| `GUARDRAILS_MASK_PARALLEL_MIN_BYTES` | `8192` | суммарный размер текстов (байты), с которого скан распараллеливается по полям (нужно ≥2 поля); `0` — встроенное значение |
+| `GUARDRAILS_MASK_PARALLEL_MIN_BYTES` | `8192` | суммарный размер текстов (байты), с которого скан распараллеливается по полям (нужно ≥2 поля); `0` — встроенное значение; отрицательное — отказ старта |
 | `GUARDRAILS_PATHS` | 3 стандартных пути | пары `path:format` (`chat_completions`, `messages`, `responses`); суффиксный матчинг, подмешиваются поверх дефолтов |
 | `GUARDRAILS_OVERRIDE_HEADER` | `x-guardrails-data-types` | per-request заголовок сужения (потребляется, не форвардится); пусто отключает |
 | `GUARDRAILS_SETTINGS_REFRESH_INTERVAL` | `30s` | интервал перечитывания настроек (сходимость реплик); `0` отключает |
 | `GUARDRAILS_RULES_REFRESH_INTERVAL` | `30s` | интервал перечитывания кастомных правил; `0` отключает |
 | `GUARDRAILS_RULES_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.yaml` | ручной файл правил |
 | `GUARDRAILS_RULES_GITLEAKS_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.gitleaks.generated.yaml` | генерируемый файл правил |
-| `GUARDRAILS_RULES_MAX_CUSTOM` | `500` | максимум кастомных правил через API; `0` = без лимита; превышение → 409 |
+| `GUARDRAILS_RULES_MAX_CUSTOM` | `500` | максимум кастомных правил через API; `0` = без лимита; превышение → 429 (`ResourceExhausted`) |
 | `GUARDRAILS_RULES_MAX_PATTERN_LEN` | `4096` | максимум длины regex кастомного правила в байтах; `0` = без лимита; превышение → 400 |
 | `GUARDRAILS_HEADERS_DATA_TYPES_HEADER` | `x-guardrails-data-types-triggered` | заголовок ответа со сработавшими типами данных |
 | `GUARDRAILS_HEADERS_TRIGGERED_RULES_HEADER` | `x-guardrails-triggered-rules` | заголовок ответа со сработавшими ID правил |
@@ -51,14 +79,14 @@
 | `GUARDRAILS_STORE_POSTGRES_DSN` | — | DSN postgres |
 | `GUARDRAILS_STORE_ENCRYPTION_ENABLED` | `false` | AES-256-GCM-шифрование masking state в redis/postgres на месте (no-op для in_memory) — см. [../storage/](../storage/) |
 | `GUARDRAILS_STORE_ENCRYPTION_KEY` | — | base64 32-байтный ключ (`openssl rand -base64 32`); обязателен при включённом шифровании; не логируется |
-| `GUARDRAILS_API_ADDR` | `:9080` | адрес config API (grpc-gateway REST); пусто отключает API |
+| `GUARDRAILS_API_ADDR` | `:9080` | адрес config API (grpc-gateway REST); пусто отключает API. API без аутентификации — защищать на сетевом уровне (только внутри кластера, не публиковать) |
 | `GUARDRAILS_UI_ENABLED` | `true` | отдавать встроенную веб-консоль на `/` на порту API (no-op, если бинарь собран без UI) |
 | `GUARDRAILS_AUDIT_ENABLED` | `false` | пофазовый аудит маскирования + эндпоинты `/v1/audit` |
 | `GUARDRAILS_AUDIT_STORE_MASKED_TEXTS` | `false` | дополнительно хранить маскированные тексты запроса (пользовательский контент — см. [SECURITY.md](../../SECURITY.md)) |
 | `GUARDRAILS_AUDIT_STORE_MASKED_RESPONSE_TEXTS` | `false` | дополнительно хранить маскированные тексты ответа модели (тот же класс чувствительности) |
-| `GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS` | `off` | хранить оригинал за каждым плейсхолдером для «показа по наведению» в UI: `off` \| `plain` \| `encrypted`. `encrypted` переиспользует ключ AES-256-GCM хранилища и требует `GUARDRAILS_STORE_ENCRYPTION_ENABLED`. БЕЗОПАСНОСТЬ: `plain`/`encrypted` сохраняют сырые чувствительные данные — ограничьте доступ к хранилищу |
+| `GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS` | `off` | хранить оригинал за каждым плейсхолдером для «показа по наведению» в UI: `off` \| `plain` \| `encrypted`. `encrypted` переиспользует ключ AES-256-GCM хранилища и требует `GUARDRAILS_STORE_ENCRYPTION_ENABLED` (иначе, как и при неизвестном значении, — отказ старта). БЕЗОПАСНОСТЬ: `plain`/`encrypted` сохраняют сырые чувствительные данные — ограничьте доступ к хранилищу |
 | `GUARDRAILS_AUDIT_RETENTION` | `24h` | сколько хранятся аудит-записи |
-| `GUARDRAILS_AUDIT_MAX_ENTRIES` | `10000` | только для in_memory: лимит аудит-записей (вытесняется старейшее) |
+| `GUARDRAILS_AUDIT_MAX_ENTRIES` | `10000` | только для in_memory: лимит аудит-записей (вытесняется старейшее); `0` = без лимита |
 
 ## Матчинг путей (`GUARDRAILS_PATHS`)
 
@@ -73,8 +101,20 @@
 - Сконфигурированные записи **подмешиваются поверх карты по умолчанию** (запись
   пользователя для того же пути побеждает), поэтому ключевые эндпоинты остаются под
   защитой даже при частичном `GUARDRAILS_PATHS`.
-- Валидация на старте (`config.Load`): неизвестный формат, ключ без ведущего `/` или
-  пустая карта ломают старт.
+- Валидация на старте (`config.Load` → `models.NewPathResolver`): неизвестный формат,
+  ключ без ведущего `/` или с пробельными символами, пустая карта — отказ старта.
+
+Порядок принятия решения для каждого входящего пути:
+
+```mermaid
+flowchart TD
+    REQ["Путь запроса"] --> STRIP["Отбросить query-строку"]
+    STRIP --> EXACT{"Точное совпадение<br/>с ключом карты?"}
+    EXACT -->|"да"| HIT["Формат найден:<br/>запрос под защитой"]
+    EXACT -->|"нет"| SUFFIX{"Есть ключ-суффикс пути?<br/>(самый длинный побеждает)"}
+    SUFFIX -->|"да"| HIT
+    SUFFIX -->|"нет"| MISS["Прозрачный passthrough<br/>без маскирования"]
+```
 
 Тело запроса, чей формат не удалось разобрать, пересылается без маскирования (fail-open)
 и увеличивает `extproc_guardrails_unsupported_body_schema_total`.

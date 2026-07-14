@@ -1,7 +1,7 @@
 ###############################################################
 # UI BUILD (management console SPA)
 ###############################################################
-FROM node:22-alpine AS ui
+FROM node:24-alpine AS ui
 
 WORKDIR /ui
 
@@ -47,7 +47,7 @@ RUN go build -trimpath -ldflags="-s -w \
 ###############################################################
 # RUNTIME
 ###############################################################
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 
 WORKDIR /app
 

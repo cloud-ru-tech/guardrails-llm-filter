@@ -1,9 +1,85 @@
+// One wrapping filter row: preset range chips, datetime bounds, then the
+// model/path/rule/type/mode fields. Everything bottom-aligns on the input line.
 .filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(200px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 12px;
-  margin-bottom: 16px;
-  align-items: end;
+  margin-bottom: 12px;
+}
+
+.rangeChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  // Keeps the chips on the input baseline (chips are shorter than the 32px inputs).
+  padding-bottom: 2px;
+}
+
+.field {
+  width: 180px;
+  min-width: 150px;
+}
+
+.fieldNarrow {
+  width: 150px;
+  min-width: 130px;
+}
+
+// Native datetime-local dressed in the DS voice: hairline border, mono digits.
+// The RFC3339 value lives in state; the title carries the raw form.
+.dateField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 210px;
+}
+
+.dateLabel {
+  font-family: var(--sans-body-s-font-family, system-ui, sans-serif);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sys-neutral-text-support);
+}
+
+.dateInput {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 6px;
+  background: var(--sys-neutral-background);
+  color: var(--sys-neutral-text-main);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--sys-neutral-decor-hovered);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--sys-primary-accent-default);
+    box-shadow: 0 0 0 1px var(--sys-primary-accent-default);
+  }
+
+  &:disabled {
+    color: var(--sys-neutral-text-disabled);
+    border-color: var(--sys-neutral-decor-disabled);
+  }
+}
+
+// The native picker chrome (calendar icon, popup) follows the app theme.
+:global(body[data-theme='dark']) .dateInput {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dateInput {
+    transition: none;
+  }
 }
 
 .filterActions {
@@ -18,13 +94,46 @@
   margin-top: 16px;
 }
 
-.mono {
-  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
-  font-size: 14px;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+}
+
+// Overflow marker for entity chips beyond the first two; the rest live in the title.
+.moreChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  color: var(--sys-neutral-text-support);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
+}
+
+// Detect = protection reduced: amber text in an outlined pill (mirrors the
+// topbar mode pill). Enforce rows carry no marker — it is the default.
+.detectPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-yellow-accent-default);
+  color: var(--sys-yellow-text-main);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.noneCell {
+  color: var(--sys-neutral-text-support);
 }

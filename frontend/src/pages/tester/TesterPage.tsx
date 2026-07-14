@@ -7,10 +7,12 @@ import { useMemo, useState } from 'react';
 
 import { ApiRequestError } from '@/api/client';
 import { useDataTypes, useScan } from '@/api/hooks';
+import type { ScanResponse } from '@/api/types';
 import { Card } from '@/components/Card';
+import { MaskChip } from '@/components/MaskedText';
 import { PageHeader } from '@/components/PageHeader';
 import { ScanResultPanel } from '@/components/ScanResultPanel';
-import { DATA_TYPE_NAME } from '@/domain/dataTypes';
+import { DATA_TYPE, DATA_TYPE_NAME } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import styles from './TesterPage.module.scss';
@@ -18,6 +20,9 @@ import styles from './TesterPage.module.scss';
 export function TesterPage() {
   const [text, setText] = useState('');
   const [dataTypes, setDataTypes] = useState<number[]>([]);
+  // The last successful scan survives a failed one: on error the result stays
+  // on screen below the error strip instead of vanishing.
+  const [lastResult, setLastResult] = useState<ScanResponse | null>(null);
 
   const dataTypesQuery = useDataTypes();
   const scan = useScan();
@@ -42,10 +47,13 @@ export function TesterPage() {
   );
 
   const handleScan = () => {
-    scan.mutate({
-      text,
-      data_types: dataTypes.length ? dataTypes : undefined,
-    });
+    scan.mutate(
+      {
+        text,
+        data_types: dataTypes.length ? dataTypes : undefined,
+      },
+      { onSuccess: (data) => setLastResult(data) },
+    );
   };
 
   const errorMessage =
@@ -58,18 +66,33 @@ export function TesterPage() {
         : null;
 
   return (
-    <div>
+    <div className={styles.page}>
       <PageHeader title={t.tester.title} description={t.tester.description} />
 
       <div className={styles.grid}>
         <Card title={t.tester.input}>
           <div className={styles.form}>
-            <FieldTextArea
-              value={text}
-              onChange={setText}
-              placeholder={t.tester.inputPlaceholder}
-              minRows={8}
-            />
+            <div className={styles.samples}>
+              <span className={styles.samplesLabel}>{t.tester.examplesLabel}</span>
+              {t.tester.samples.map((sample) => (
+                <button
+                  key={sample.label}
+                  type="button"
+                  className={styles.sampleChip}
+                  onClick={() => setText(sample.text)}
+                >
+                  {sample.label}
+                </button>
+              ))}
+            </div>
+            <div className={styles.monoArea}>
+              <FieldTextArea
+                value={text}
+                onChange={setText}
+                placeholder={t.tester.inputPlaceholder}
+                minRows={8}
+              />
+            </div>
             <FieldSelect
               selection="multiple"
               label={t.tester.dataTypes}
@@ -91,15 +114,38 @@ export function TesterPage() {
           </div>
         </Card>
 
-        <Card title={t.tester.result.masked}>
+        <Card title={t.tester.resultTitle}>
           {errorMessage && <Alert appearance="error" icon description={errorMessage} />}
-          {scan.data ? (
-            <ScanResultPanel result={scan.data} dtLabel={dtLabel} />
+
+          {lastResult ? (
+            <>
+              {errorMessage && (
+                <Typography
+                  family="sans"
+                  purpose="body"
+                  size="s"
+                  tag="div"
+                  className={styles.staleNote}
+                >
+                  {t.tester.staleResult}
+                </Typography>
+              )}
+              <ScanResultPanel result={lastResult} dtLabel={dtLabel} />
+            </>
           ) : (
             !errorMessage && (
-              <Typography family="sans" purpose="body" size="s" tag="span" className={styles.muted}>
-                {t.tester.empty}
-              </Typography>
+              <div className={styles.empty}>
+                <div className={styles.emptyChips} aria-hidden="true">
+                  <MaskChip placeholder="<EMAIL_1>" dataType={DATA_TYPE.PERSONAL_DATA} />
+                  <MaskChip placeholder="<API_KEY_1>" dataType={DATA_TYPE.API_KEYS} />
+                </div>
+                <Typography family="sans" purpose="body" size="m" tag="div" className={styles.emptyTitle}>
+                  {t.tester.emptyTitle}
+                </Typography>
+                <Typography family="sans" purpose="body" size="s" tag="div" className={styles.emptyHint}>
+                  {t.tester.emptyHint}
+                </Typography>
+              </div>
             )
           )}
         </Card>

@@ -11,7 +11,6 @@ import {
 import { SegmentedControl } from '@snack-uikit/segmented-control';
 import { toaster } from '@snack-uikit/toaster';
 import { Checkbox, Switch } from '@snack-uikit/toggles';
-import { Typography } from '@snack-uikit/typography';
 import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import {
@@ -26,9 +25,10 @@ import type { Rule, RuleSource } from '@/api/types';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
 import { DataGrid, type Column } from '@/components/DataGrid';
+import { EntityChip } from '@/components/EntityChip';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryBoundary } from '@/components/QueryBoundary';
-import { DATA_TYPE_NAME, DATA_TYPE_TONE } from '@/domain/dataTypes';
+import { CHART_COLOR, DATA_TYPE_NAME } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import pageStyles from '@/components/Page.module.scss';
@@ -37,6 +37,15 @@ import styles from './RulesPage.module.scss';
 
 type SourceFilter = RuleSource | 'all';
 type ViewMode = 'table' | 'effective';
+
+/** Colored entity dot for select options — always next to the text label. */
+const entityDot = (id: number) => (
+  <span
+    className={styles.entityDot}
+    style={{ background: CHART_COLOR[id] ?? 'var(--sys-neutral-text-support)' }}
+    aria-hidden="true"
+  />
+);
 
 export function RulesPage() {
   const [source, setSource] = useState<SourceFilter>('all');
@@ -239,20 +248,36 @@ export function RulesPage() {
       ),
     },
     {
-      key: 'rule_id',
-      header: t.rules.col.ruleId,
-      render: (r) => <span className={styles.mono}>{r.rule_id}</span>,
+      key: 'rule',
+      header: t.rules.col.rule,
+      render: (r) => {
+        // Builtin rules ship name === rule_id: one mono line. Custom rules show
+        // the human name with the mono id as a support second line.
+        const hasOwnName = Boolean(r.name) && r.name !== r.rule_id;
+        // The group is only worth a suffix when it adds information: hide it
+        // when the id prefix already says it ("CREDENTIALS" vs "credentials.*",
+        // case-insensitive) and when it merely repeats the data type shown as
+        // a chip in the next column ("PERSONAL_DATA" for pii.* rules).
+        const group = r.group?.toLowerCase();
+        const showGroup =
+          Boolean(group) &&
+          !r.rule_id.toLowerCase().startsWith(group!) &&
+          group !== DATA_TYPE_NAME[r.data_type]?.toLowerCase();
+        return (
+          <div className={styles.ruleCell}>
+            {hasOwnName && <span className={styles.ruleName}>{r.name}</span>}
+            <span className={hasOwnName ? `${styles.ruleId} ${styles.ruleIdSub}` : styles.ruleId}>
+              {r.rule_id}
+              {showGroup && <span className={styles.ruleGroup}> · {r.group}</span>}
+            </span>
+          </div>
+        );
+      },
     },
-    {
-      key: 'name',
-      header: t.rules.col.name,
-      render: (r) => <span className={styles.name}>{r.name}</span>,
-    },
-    { key: 'group', header: t.rules.col.group, render: (r) => r.group || t.common.none },
     {
       key: 'data_type',
       header: t.rules.col.dataType,
-      render: (r) => <Badge tone={DATA_TYPE_TONE[r.data_type] ?? 'neutral'}>{dtLabel(r.data_type)}</Badge>,
+      render: (r) => <EntityChip dataType={r.data_type}>{dtLabel(r.data_type)}</EntityChip>,
     },
     {
       key: 'source',
@@ -266,9 +291,9 @@ export function RulesPage() {
     },
     {
       key: 'enabled',
-      header: t.rules.col.enabled,
+      header: <span className={styles.nowrap}>{t.rules.col.enabled}</span>,
       align: 'center',
-      width: '90px',
+      width: '96px',
       render: (r) => (
         <Switch
           checked={r.enabled ?? true}
@@ -280,7 +305,7 @@ export function RulesPage() {
     {
       key: 'actions',
       header: '',
-      width: '96px',
+      width: '88px',
       render: (r) =>
         r.source === 'custom' ? (
           <div className={styles.actions}>
@@ -339,41 +364,8 @@ export function RulesPage() {
             { value: 'effective', label: t.rules.viewEffective },
           ]}
         />
-      </div>
-
-      {view === 'effective' ? (
-        <QueryBoundary
-          isLoading={allRulesQuery.isLoading}
-          error={allRulesQuery.error}
-          onRetry={() => allRulesQuery.refetch()}
-        >
-          <Card title={t.rules.effective.title} subtitle={t.rules.effective.subtitle}>
-            {effectiveGroups.length === 0 ? (
-              <span className={styles.mutedText}>{t.rules.effective.empty}</span>
-            ) : (
-              <div className={styles.effectiveGroups}>
-                {effectiveGroups.map((group) => (
-                  <div key={group.id} className={styles.effectiveGroup}>
-                    <div className={styles.effectiveHead}>
-                      <Badge tone={DATA_TYPE_TONE[group.id] ?? 'neutral'}>{dtLabel(group.id)}</Badge>
-                      <span className={styles.mutedText}>{t.rules.effective.count(group.rules.length)}</span>
-                    </div>
-                    <div className={styles.effectiveChips}>
-                      {group.rules.map((r) => (
-                        <Badge key={r.rule_id} tone="neutral">
-                          {r.rule_id}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </QueryBoundary>
-      ) : (
-        <>
-          <div className={pageStyles.toolbar}>
+        {view === 'table' && (
+          <>
             <div className={styles.filterSource}>
               <SegmentedControl<SourceFilter>
                 value={source}
@@ -390,7 +382,10 @@ export function RulesPage() {
                 selection="single"
                 value={dataTypeFilter}
                 onChange={(v) => setDataTypeFilter(v == null ? 0 : Number(v))}
-                options={[{ value: 0, option: t.rules.dataTypeAll }, ...dataTypeOptions]}
+                options={[
+                  { value: 0, option: t.rules.dataTypeAll },
+                  ...dataTypeOptions.map((o) => ({ ...o, beforeContent: entityDot(o.value) })),
+                ]}
               />
             </div>
             <div className={styles.filterSearch}>
@@ -402,22 +397,52 @@ export function RulesPage() {
                 prefixIcon={<SearchSVG />}
               />
             </div>
-            <Typography
-              family="sans"
-              purpose="body"
-              size="s"
-              tag="span"
-              className={styles.count}
-            >
-              {rows.length}
-            </Typography>
-          </div>
+            <span className={styles.count}>{t.rules.counter(rows.length)}</span>
+          </>
+        )}
+      </div>
 
+      {view === 'effective' ? (
+        <QueryBoundary
+          isLoading={allRulesQuery.isLoading}
+          error={allRulesQuery.error}
+          onRetry={() => allRulesQuery.refetch()}
+        >
+          <Card title={t.rules.effective.title} subtitle={t.rules.effective.subtitle}>
+            {effectiveGroups.length === 0 ? (
+              <span className={styles.mutedText}>{t.rules.effective.empty}</span>
+            ) : (
+              <div className={styles.effectiveGroups}>
+                {effectiveGroups.map((group) => (
+                  <div key={group.id} className={styles.effectiveGroup}>
+                    <div className={styles.effectiveHead}>
+                      <EntityChip dataType={group.id}>{dtLabel(group.id)}</EntityChip>
+                      <span className={styles.effectiveCount}>{t.rules.counter(group.rules.length)}</span>
+                    </div>
+                    <div className={styles.effectiveChips}>
+                      {group.rules.map((r) => (
+                        <span
+                          key={r.rule_id}
+                          className={styles.effectiveChip}
+                          title={r.name && r.name !== r.rule_id ? r.name : undefined}
+                        >
+                          {r.rule_id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </QueryBoundary>
+      ) : (
+        <>
           {selected.size > 0 && (
             <div className={styles.bulkBar}>
-              <Typography family="sans" purpose="label" size="s" tag="span">
-                {t.rules.bulkSelected(selected.size)}
-              </Typography>
+              <span className={styles.bulkLabel}>
+                {t.rules.bulkSelectedLabel}: <span className={styles.bulkCount}>{selected.size}</span>
+              </span>
               <div className={styles.bulkActions}>
                 <ButtonOutline
                   label={t.rules.bulkEnable}

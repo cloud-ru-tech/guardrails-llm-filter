@@ -1,98 +1,281 @@
-.statGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
+// «Обзор» — narrative: сколько (hero) → что (bars) → когда (area) → последние.
 
-.chartGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
+// ---- Hero -----------------------------------------------------------------
 
-.lifetime {
+.heroCard {
   margin-bottom: 24px;
 }
 
-.lifetimeLists {
+.heroBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 24px 48px;
+}
+
+.heroMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.heroLabel {
+  color: var(--sys-neutral-text-support);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+// The one display-size numeral on the page: mono, tabular, accent.
+.heroValue {
+  font-family: var(--mono-headline-m-font-family, ui-monospace, monospace);
+  font-size: 44px;
+  line-height: 52px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-primary-accent-default);
+}
+
+.heroSplit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+  padding-bottom: 6px;
+}
+
+.splitCounts {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--sys-neutral-text-support);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.splitPair {
+  white-space: nowrap;
+}
+
+.splitNum {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+}
+
+// Proportional enforce/detect split. With 0/0 no segments render and the
+// neutral hairline track is the whole statement.
+.splitBar {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--sys-neutral-background-opacity);
+}
+
+.splitEnforce,
+.splitDetect {
+  flex-basis: 0;
+  flex-shrink: 1;
+  min-width: 6px;
+  border-radius: 2px;
+}
+
+.splitEnforce {
+  background: var(--chart-primary);
+}
+
+.splitDetect {
+  background: var(--sys-yellow-accent-default);
+}
+
+.heroReadouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  margin-left: auto;
+  padding-bottom: 4px;
+}
+
+@media (max-width: 900px) {
+  .heroReadouts {
+    margin-left: 0;
+  }
+}
+
+// ---- Audit-window sections --------------------------------------------------
+
+.auditSections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// Section-level context label: the single ALL-CAPS mono role.
+.sectionEyebrow {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sys-neutral-text-support);
+  margin-top: 8px;
+}
+
+.chartRow {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.countList {
+@media (max-width: 1199px) {
+  .chartRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ---- «Топ правил» HTML bar-list ---------------------------------------------
+
+.ruleList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.ruleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(72px, 30%, 160px) max-content;
+  align-items: center;
+  gap: 12px;
+}
+
+.ruleId {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--sys-neutral-text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ruleTrack {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--sys-neutral-background-opacity);
+  overflow: hidden;
+}
+
+.ruleFill {
+  display: block;
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  background: var(--chart-primary);
+}
+
+.ruleCount {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  min-width: 3ch;
+  text-align: right;
+}
+
+// ---- «Последние срабатывания» -------------------------------------------------
+
+.recentList {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.countRow {
+.recentRow {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--sys-neutral-decor-default);
 }
 
-.countValue {
+.recentRow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.recentRow:last-child {
+  padding-bottom: 0;
+}
+
+.recentTime {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  color: var(--sys-neutral-text-main);
-  font-weight: 600;
+  color: var(--sys-neutral-text-support);
+  white-space: nowrap;
 }
 
-.mono {
-  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+.recentModel {
   font-size: 14px;
   color: var(--sys-neutral-text-main);
-  word-break: break-all;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Amber outlined detect marker — enforce is the default and gets no mark.
+.detectPill {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--sys-yellow-text-main);
+  border: 1px solid var(--sys-yellow-accent-default);
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.recentChips {
+  flex: 1 1 260px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+// ---- Shared ----------------------------------------------------------------
+
+.allLink {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sys-primary-accent-default);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+
+.allLink:hover {
+  text-decoration: underline;
+}
+
+.allLink:focus-visible {
+  outline: 2px solid var(--sys-primary-accent-default);
+  outline-offset: 2px;
 }
 
 .muted {
-  color: var(--sys-neutral-text-support);
-  font-size: 14px;
-}
-
-@media (max-width: 900px) {
-  .lifetimeLists {
-    grid-template-columns: 1fr;
-  }
-}
-
-.full {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 900px) {
-  .chartGrid {
-    grid-template-columns: 1fr;
-  }
-  .full {
-    grid-column: auto;
-  }
-}
-
-.modeBar {
-  display: flex;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--sys-neutral-background-opacity);
-}
-
-.modeEnforce {
-  background: var(--chart-primary);
-}
-
-.modeDetect {
-  background: var(--chart-dt-3);
-}
-
-.modeLegend {
-  display: flex;
-  justify-content: space-between;
   color: var(--sys-neutral-text-support);
   font-size: 14px;
 }

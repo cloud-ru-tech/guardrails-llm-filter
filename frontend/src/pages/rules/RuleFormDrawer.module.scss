@@ -21,28 +21,58 @@
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
+  gap: 20px;
+}
+
+// Section rhythm shared with Settings: eyebrow label, 16px field gap,
+// hairline between sections.
+.section {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+}
+
+.section + .section {
+  padding-top: 20px;
+  border-top: 1px solid var(--sys-neutral-decor-default);
+}
+
+// The one ALL-CAPS role in the system — the 11px mono eyebrow.
+.sectionTitle {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sys-neutral-text-support);
 }
 
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
 }
 
-.testSection {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 16px;
-  margin-top: 4px;
-  border-top: 1px solid var(--sys-neutral-decor-default);
+// Instrument voice for machine-facing inputs: ids, regex, keywords,
+// placeholders, numbers, test samples.
+.monoField input,
+.monoField textarea {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
 }
 
-.testTitle {
-  color: var(--sys-neutral-text-support);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+// Entity dot inside the data-type select (droplist options and field prefix);
+// the text label always sits right next to it.
+.entityDot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .testActions {

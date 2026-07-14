@@ -1,32 +1,65 @@
-.card {
-  border: 1px solid var(--sys-neutral-decor-default);
-  border-radius: 12px;
-  padding: 24px;
-  background: var(--sys-neutral-background);
+// Settings: a real <form> in one 720px column — three snack-uikit outline
+// Cards (Card.Header with a tinted icon emblem carries each section's
+// title/description), closed by a divider and a footer action row
+// (Сохранить / Отмена), the conventional form shape.
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   max-width: 720px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
 }
 
-.row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rowInline {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.sectionCard {
+  width: 100%;
 }
 
 .hint {
   color: var(--sys-neutral-text-support);
 }
 
-.footer {
+// «Маскирование»: the master switch — whole row is the click target.
+.switchRow {
   display: flex;
-  gap: 8px;
-  padding-top: 8px;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+// «Режим»: two DS selection Cards side by side.
+.modeTiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.modeCard {
+  width: 100%;
+}
+
+// Detect's protection-consequence line: amber, never red (red = errors only).
+.modeTileConsequence {
+  color: var(--sys-yellow-text-main);
+  font-weight: 500;
+}
+
+// «Типы данных»: entity dot inside droplist options; the option text is its label.
+.optionDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .modeTiles {
+    grid-template-columns: 1fr;
+  }
 }
