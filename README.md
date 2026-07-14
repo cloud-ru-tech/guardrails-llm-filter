@@ -27,10 +27,19 @@
 оригиналы в ответе — прозрачно для клиента, включая потоковую передачу токен-за-токеном
 (SSE).
 
-```
-client ──► guardrails-llm-filter ──[маскирование]──► LLM-провайдер
-   ▲                 │
-   └──[демаскирование]┘
+Один запрос от начала до конца:
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant G as guardrails-llm-filter
+    participant P as LLM-провайдер
+    C->>G: POST /v1/chat/completions — "пишите на a@b.com"
+    Note over G: скан ~260 regex-правил,<br/>замена значений на плейсхолдеры
+    G->>P: маскированный запрос — "пишите на #60;EMAIL_1#62;"
+    P-->>G: ответ с плейсхолдерами (JSON или SSE-кадры)
+    Note over G: демаскирование — полное тело<br/>или токен-за-токеном по SSE-кадрам
+    G-->>C: ответ с оригиналами — "пишите на a@b.com"
 ```
 
 LLM-провайдер никогда не видит чувствительные значения; клиент никогда не видит
@@ -140,7 +149,7 @@ bash demo.sh                   # шлёт промпты с фейковыми e
 |---|---|---|
 | `GUARDRAILS_LISTEN_ADDR` | `:8080` | data-plane HTTP-адрес (сюда обращаются клиенты) |
 | `GUARDRAILS_UPSTREAM_BASE_URL` | — | **обязательно**: базовый URL upstream LLM-провайдера; путь запроса дописывается к нему |
-| `GUARDRAILS_UPSTREAM_TIMEOUT` | `120s` | таймаут заголовков ответа upstream (время до первого байта); не ограничивает стриминговое тело, чья жизнь следует за соединением клиента |
+| `GUARDRAILS_UPSTREAM_TIMEOUT` | `120s` | таймаут заголовков ответа upstream (время до первого байта); не ограничивает стриминговое тело, чья жизнь следует за соединением клиента; `0` отключает |
 | `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS` | `100` | пул соединений upstream: максимум idle-соединений |
 | `GUARDRAILS_UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | `100` | пул соединений upstream: максимум idle на хост |
 | `GUARDRAILS_UPSTREAM_IDLE_CONN_TIMEOUT` | `90s` | пул соединений upstream: таймаут idle-соединения |
@@ -163,6 +172,8 @@ bash demo.sh                   # шлёт промпты с фейковыми e
 | `GUARDRAILS_RULES_REFRESH_INTERVAL` | `30s` | интервал перечитывания кастомных правил; `0` отключает |
 | `GUARDRAILS_RULES_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.yaml` | ручной файл правил |
 | `GUARDRAILS_RULES_GITLEAKS_REGEX_RULES_FILE` | `./configs/guardrails_regex_rules.gitleaks.generated.yaml` | генерируемый файл правил |
+| `GUARDRAILS_RULES_MAX_CUSTOM` | `500` | лимит числа кастомных правил через API (каждое исполняется на каждом запросе); `0` отключает |
+| `GUARDRAILS_RULES_MAX_PATTERN_LEN` | `4096` | лимит длины regex кастомного правила; `0` отключает |
 | `GUARDRAILS_HEADERS_DATA_TYPES_HEADER` | `x-guardrails-data-types-triggered` | заголовок ответа со сработавшими типами данных |
 | `GUARDRAILS_HEADERS_TRIGGERED_RULES_HEADER` | `x-guardrails-triggered-rules` | заголовок ответа со сработавшими ID правил |
 | `GUARDRAILS_HEADERS_EXPOSE_TRIGGERED_RULES` | `false` | эмитить заголовок сработавших правил |
@@ -192,6 +203,8 @@ Env-значения только **засевают** глобальные на
 `SETTINGS_REFRESH_INTERVAL`. Per-request override-заголовок работает **только на сужение**:
 он может пересечь глобальные типы данных, но никогда не расширить их; `none` пропускает
 маскирование для запроса; неразбираемый ввод полностью игнорируется (склон к защите).
+Заголовок считается доверенным: если сервис доступен недоверенным клиентам, вырезайте его
+на фронтирующем шлюзе — иначе клиент может сузить маскирование собственных запросов.
 
 ## Config API
 
@@ -228,6 +241,18 @@ curl -X POST localhost:9080/v1/rules -H 'Content-Type: application/json' -d '{
   задействованными правилами, типами данных и плейсхолдерами (страница «Аудит» в консоли).
 
 ## Деплой
+
+Форма деплоя: один контейнер, три порта; внешнее хранилище опционально (нужно, когда
+реплик больше одной или правила/аудит должны переживать рестарт):
+
+```mermaid
+flowchart LR
+    C["Клиенты (SDK OpenAI / Anthropic)"] -->|":8080 data-plane"| G["guardrails-llm-filter"]
+    O["Оператор / браузер"] -->|":9080 config API + консоль"| G
+    M["Prometheus"] -->|":9090 /metrics"| G
+    G -->|"маскированные запросы"| P["LLM-провайдер"]
+    G <-->|"правила, настройки, аудит"| S[("in_memory / redis / postgres")]
+```
 
 Kustomize-манифесты — в [`deploy/kubernetes/`](deploy/kubernetes/): Deployment (HTTP-пробы
 `/healthz` + `/readyz`), Service, ConfigMap и Secret. Задайте `GUARDRAILS_UPSTREAM_BASE_URL`

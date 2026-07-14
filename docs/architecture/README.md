@@ -1,18 +1,48 @@
 # Архитектура
 
-```
-                        ┌──────────────── guardrails-llm-filter ────────────────┐
-client ──►:8080 HTTP ───┤ gateway (data-path: mask → forward → demask)          │
-   ▲                    │ :9000 gRPC mgmt API   :9080 HTTP mgmt API + консоль    │
-   │                    │ :9090 Prometheus      /healthz /readyz на :8080        │
-   └──── ответ ─────────┤                                                        │
-                        │  settings.Service ◄──┐                                 │
-                        │  rules.UseCase ──────┼──► repository.Store (memory|redis|postgres) │
-                        │  registry.Reloadable ┘                                 │
-                        └────────────────────────────────┬───────────────────────┘
-                                                          │ (маскированный запрос)
-                                                          ▼
-                                                    LLM-провайдер
+Компоненты сервиса и их связи (каждый блок — реальный пакет, стрелки — вызовы в рантайме):
+
+```mermaid
+flowchart LR
+    Client["Клиент"]
+    Operator["Оператор / консоль"]
+    Upstream["LLM-провайдер (upstream)"]
+    Prom["Prometheus"]
+
+    subgraph DP["Data-plane :8080 (+ /healthz, /readyz)"]
+        GW["gateway.Handler<br/>internal/controller/gateway"]
+        MaskUC["mask.UseCase<br/>internal/usecases/guardrails/mask"]
+        Demask["demask + sseproc<br/>internal/guardrails/demask,<br/>internal/sseproc"]
+    end
+
+    subgraph MGMT["Management: REST :9080, gRPC :9000"]
+        REST["grpc-gateway + SPA<br/>internal/app/servers.go, frontend/"]
+        GRPC["api.Controller<br/>internal/controller/api"]
+        RulesUC["rules.UseCase<br/>internal/usecases/rules"]
+        SettingsSvc["settings.Service<br/>internal/service/settings"]
+    end
+
+    Registry["registry.Reloadable<br/>pkg/guardrails/regex/registry"]
+    Store["repository.Store<br/>(memory | redis | postgres)"]
+    Metrics["promhttp<br/>метрики internal/metrics"]
+
+    Client -->|"HTTP :8080"| GW
+    GW -->|"маскированный запрос"| Upstream
+    Upstream -->|"ответ JSON / SSE"| GW
+    GW --> MaskUC
+    GW --> Demask
+    GW -->|"эффективные настройки"| SettingsSvc
+    Operator -->|"REST + консоль :9080"| REST
+    Operator -->|"gRPC :9000"| GRPC
+    REST -->|"loopback gRPC"| GRPC
+    GRPC --> RulesUC
+    GRPC --> SettingsSvc
+    RulesUC -->|"merge-and-swap"| Registry
+    MaskUC --> Registry
+    Demask --> Registry
+    RulesUC --> Store
+    SettingsSvc --> Store
+    Prom -->|"scrape :9090"| Metrics
 ```
 
 Клиенты обращаются к data-plane HTTP-серверу (`:8080`) вместо провайдера. Сервис сам
@@ -43,12 +73,73 @@ data-path нет. Management API определяется контрактом (
 обрабатываются вместе, masking state живёт в процессе на время жизни запроса — внешнее
 хранилище на data-path не требуется. Подробно — в [request-lifecycle.md](request-lifecycle.md).
 
+Горячий путь по шагам; каждая ветка с ошибкой — passthrough
+([инвариант 2, fail-open](#инварианты-нарушать-нельзя)):
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant G as gateway.Handler
+    participant M as mask.UseCase
+    participant U as LLM-провайдер
+    participant D as demask / sseproc
+
+    C->>G: POST /v1/... (тело запроса)
+    Note over G: путь→формат, effective settings,<br/>чтение тела (превышен лимит → 413)
+    alt путь защищён и маскирование включено
+        G->>M: Handle(тексты, типы данных)
+        M-->>G: MaskedTexts + MaskingState (или ошибка)
+        alt enforce и есть замены
+            Note over G: sjson-патч тела, audit.Record,<br/>demask.Factory для ответа
+        else ошибка маскирования / нет находок / detect-режим
+            Note over G: fail-open — тело не тронуто,<br/>ответ будет передан как есть
+        end
+    end
+    G->>U: запрос (маскированный или исходный)
+    U-->>G: ответ
+    alt демаскирование и SSE-поток
+        loop каждый chunk
+            G->>D: ProcessChunk
+            D-->>G: демаскированный кадр (ошибка → сырой chunk)
+            G-->>C: запись + flush
+        end
+    else демаскирование и полный JSON
+        G->>D: демаскирование полей + sjson-патч
+        D-->>G: тело с восстановленными значениями
+        G-->>C: ответ целиком
+    else passthrough
+        G-->>C: relay без изменений (с flush)
+    end
+```
+
 ## Сборка зависимостей (`internal/app/app.go`, `internal/app/servers.go`)
 
 `internal/app/app.go` — DI-контейнер из ленивых мемоизированных геттеров (`Store()`,
 `SettingsService()`, `RulesUseCase()`, `Gateway()`, `GrpcController()`, `GrpcServer()`,
 …); геттеры **паникуют при некорректной конфигурации на старте** — это осознанно:
 неправильная конфигурация должна убивать pod, а не деградировать молча.
+
+Цепочка геттеров разворачивается в такой порядок сборки (каждый узел мемоизируется при
+первом обращении):
+
+```mermaid
+flowchart TD
+    CFG["config.Load<br/>(env GUARDRAILS_*)"] --> STORE["Store()<br/>repository/factory: memory / redis / postgres"]
+    CFG --> FILES["loadFileRules()<br/>(YAML-файлы правил)"]
+    FILES --> REG["GuardrailsRegistry()<br/>registry.Reloadable"]
+    STORE --> SET["SettingsService()"]
+    STORE --> REL["RulesReloader()"]
+    REG --> REL
+    REG --> MASK["MaskUseCase() / DemaskerProvider()"]
+    SET --> GWH["Gateway()"]
+    MASK --> GWH
+    GWH --> START["Start(ctx): Load настроек + Reload правил из стора,<br/>серверы :8080 / :9090 / :9000 / :9080, refresh-тикеры"]
+    REL --> START
+```
+
+Management-контроллер (`GrpcController()`) собирается поверх той же цепочки:
+`RulesUseCase()` (за `RulesReloader()`), `SettingsService()` и scan use case поверх
+`MaskUseCase()`.
 
 `internal/app/servers.go` разводит серверы. `Start(ctx)` запускает:
 - data-plane gateway-сервер (`GUARDRAILS_LISTEN_ADDR`, по умолчанию `:8080`) с
@@ -59,8 +150,16 @@ data-path нет. Management API определяется контрактом (
 - management REST-сервер (grpc-gateway, `GUARDRAILS_API_ADDR`, `:9080`, пустой адрес
   отключает REST), проксирующий на локальный gRPC-порт.
 
+Перед подъёмом серверов `Start` загружает настройки и custom-правила из стора
+**fail-open** ([инвариант 2](#инварианты-нарушать-нельзя)): при ошибке сервис стартует на env-дефолтах и файловых
+правилах, а фоновые refresh-тикеры (`SettingsService().RunRefresh`,
+`RulesReloader().RunRefresh`) подтянут состояние, когда стор оживёт; те же тикеры сводят
+реплики после изменений через API на общем сторе.
+
 Data-plane gateway (`:8080`) и management API (gRPC `:9000` / REST `:9080`) — независимые
-серверы. Остановка через экспортируемый `Stop()` (main использует `signal.NotifyContext`).
+серверы. Остановка через экспортируемый `Stop()` (main использует `signal.NotifyContext`);
+порядок: сначала data-plane (дренаж in-flight запросов, включая длинные SSE), затем REST,
+gRPC и метрики, дренаж аудит-рекордера и `Close()` стора — всё в 10-секундном бюджете.
 Логирование — stdlib `slog` за тонкими хелперами в `internal/logging`
 (`logging.Error(ctx, msg, err, kv...)` — ошибка позиционна).
 

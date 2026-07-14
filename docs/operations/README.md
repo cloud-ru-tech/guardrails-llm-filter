@@ -9,6 +9,21 @@
 | 9080 | HTTP | management API (REST-прокси grpc-gateway) + встроенная веб-консоль, `GUARDRAILS_API_ADDR` (пусто отключает) |
 | 9090 | HTTP | Prometheus `/metrics`, `GUARDRAILS_METRICS_PORT` |
 
+Кто куда ходит:
+
+```mermaid
+flowchart LR
+    subgraph GW["guardrails-llm-filter"]
+        DP["data-plane: mask → forward → demask"]
+        MGMT["management API + веб-консоль"]
+        MET["/metrics"]
+    end
+    CLIENT["Клиент LLM API"] -->|"HTTP :8080"| DP
+    OPER["Оператор"] -->|"REST :9080 / gRPC :9000"| MGMT
+    PROM["Prometheus"] -->|"GET :9090/metrics"| MET
+    DP -->|"маскированный запрос"| UP["Upstream LLM-провайдер"]
+```
+
 ## Метрики (namespace `extproc_guardrails_`)
 
 | Метрика | Тип / метки | Смысл |
@@ -25,13 +40,16 @@
 | `requests_masked_total` | counter `{mode=enforce\|detect}` | запросы, где хотя бы одно значение было замаскировано (enforce) или было бы (detect); чистый сигнал на запрос для алертинга. Вид shadow-раскатки: `sum by (mode) (rate(...[5m]))` |
 | `mask_failures_total` | counter | ошибки сценария маскирования (fail-open пропуск) |
 | `demask_failures_total` | counter `{mode=full\|sse}` | сбои/откаты демаскирования |
-| `masking_state_store_failures_total` | counter `{op=put\|get\|delete\|decrypt}` | fail-open ошибки хранилища; `decrypt` = недешифруемая запись |
+| `masking_state_store_failures_total` | counter `{op=put\|get\|delete\|decrypt}` | fail-open ошибки хранилища masking state; `decrypt` = недешифруемая запись. В standalone-шлюзе data-path к стору не обращается, так что серия в норме отсутствует |
 | `audit_store_failures_total` | counter `{op=put\|get\|list}` | ошибки хранилища аудита |
 | `audit_records_dropped_total` | counter | аудит-записи, отброшенные при переполнении очереди async-записи |
-| `unsupported_body_schema_total` | counter | тела запроса, пропущенные без маскирования из-за нераспознанной схемы (fail-open) |
+| `unknown_format_passthrough_total` | counter | тела/SSE-стримы ответа, пропущенные без демаскирования из-за неизвестного формата API в masking state (fail-open) |
+| `unsupported_body_schema_total` | counter | тела запроса, пропущенные без маскирования из-за нераспознанной схемы (fail-open); ненулевой темп обычно значит, что путь в `GUARDRAILS_PATHS` привязан к неверному формату |
 | `unguarded_path_passthrough_total` | counter | запросы, проксированные на upstream без маскирования, потому что путь не совпал ни с одним охраняемым путём LLM |
 
-Плюс стандартные серверные gRPC-метрики из `go-grpc-prometheus`.
+Плюс стандартные серверные gRPC-метрики из `go-grpc-prometheus` (management API :9000).
+Пошаговое подключение Prometheus/Alertmanager/Grafana — в
+[../monitoring/README.md](../monitoring/README.md).
 
 ## Алертинг
 
@@ -92,8 +110,8 @@
   обращаются к сервису напрямую — edge-прокси в data-path не нужен.
 - **Много реплик**: используйте хранилище `redis`/`postgres`, чтобы кастомные
   правила/настройки были общими; тикеры обновления (30s по умолчанию) сходят изменения
-  политики. Masking state обычно in-process, но при межрепличном приземлении запроса и
-  ответа общий стор служит fallback'ом.
+  политики. Masking state живёт in-process: один `ServeHTTP` выполняет
+  mask→forward→demask на одной реплике, межрепличный round-trip состояния не нужен.
 
 ## Чеклист безопасности для операторов
 
@@ -121,6 +139,25 @@
    непроверенном TLS-канале их увидит.
 
 ## Режимы отказа
+
+Каждое fail-open-решение data-path наблюдаемо своим счётчиком
+(`internal/controller/gateway`, `internal/sseproc`):
+
+```mermaid
+flowchart TD
+    REQ["Входящий запрос (:8080)"] --> GUARD{"Путь охраняемый?"}
+    GUARD -->|"нет"| UNG["unguarded_path_passthrough_total:<br/>форвард как есть"]
+    GUARD -->|"да"| PARSE{"Тело распознано форматом?"}
+    PARSE -->|"нет"| SCHEMA["unsupported_body_schema_total:<br/>форвард как есть"]
+    PARSE -->|"да"| MASK{"Маскирование успешно?"}
+    MASK -->|"ошибка"| MFAIL["mask_failures_total:<br/>форвард как есть"]
+    MASK -->|"нет находок / detect"| VERB["форвард как есть, ответ без демаска<br/>(detect: requests_masked_total)"]
+    MASK -->|"enforce, есть замены"| ENF["requests_masked_total:<br/>форвард маскированного тела"]
+    ENF --> RESP{"Демаскирование ответа"}
+    RESP -->|"неизвестный формат"| UFMT["unknown_format_passthrough_total:<br/>тело/стрим как есть"]
+    RESP -->|"ошибка (full или SSE-чанк)"| DFAIL["demask_failures_total:<br/>плейсхолдеры остаются у клиента"]
+    RESP -->|"успех"| OK["клиент получает<br/>восстановленные значения"]
+```
 
 | Отказ | Поведение |
 |---|---|

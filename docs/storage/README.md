@@ -5,17 +5,44 @@
 
 ```go
 MaskingStateStore  // Put/Get/DeleteMaskingState(ctx, requestID, state)
-RuleStore          // ListRules / GetRule / SaveRule (upsert) / DeleteRule
+RuleStore          // ListRules / GetRule / CreateRule / SaveRule (upsert) / DeleteRule
+                   //   + ListDisabledRuleIDs / SetRuleDisabled — набор ID, отключённых через API
 SettingsStore      // GetSettings (nil,nil = никогда не задавали) / SaveSettings
-AuditStore         // Put/GetAuditRecord / ListAuditRecords (фильтр + курсор)
+                   //   + SaveSettingsIfAbsent — атомарный seed-once env-дефолтов при старте
+AuditStore         // Put/GetAuditRecord (upsert) / ListAuditRecords (фильтр + курсор)
+                   //   + SetAuditResponseTexts — обогащение записи фазой ответа
 Store              // все четыре + Ping + Close
 ```
 
-`repository.ErrNotFound` — общий sentinel «не найдено». Подпакет `factory`
+`repository.ErrNotFound` — общий sentinel «не найдено»; `ErrAlreadyExists` — ответ
+`CreateRule` на занятый ID (атомарно в каждом бэкенде: проверка под mutex / `HSETNX` /
+`ON CONFLICT DO NOTHING`). Подпакет `factory`
 (`internal/repository/factory`) строит бэкенд — он в подпакете, потому что пакет
 интерфейсов должен оставаться импортируемым реализациями (иначе цикл импортов). Внешние
 бэкенды `Ping`'уются на старте, чтобы неправильная конфигурация ломала старт pod'а, а не
 data-path.
+
+Роли, интерфейс и сборка бэкенда:
+
+```mermaid
+flowchart TD
+    subgraph roles["Четыре роли одного интерфейса"]
+        MS["MaskingStateStore — межрепличный fallback"]
+        RS["RuleStore — кастомные правила + disabled-set"]
+        SS["SettingsStore — глобальные настройки"]
+        AS["AuditStore — журнал аудита"]
+    end
+    MS --> ST["repository.Store (+ Ping, Close)"]
+    RS --> ST
+    SS --> ST
+    AS --> ST
+    ST -->|"factory.New по GUARDRAILS_STORE_BACKEND"| SEL{"бэкенд"}
+    SEL -->|"in_memory (дефолт)"| MEM["memory — карты + RWMutex + janitor"]
+    SEL -->|"redis, Ping на старте"| RED["redis — go-redis/v9"]
+    SEL -->|"postgres, bootstrap schema.sql"| PG["postgres — pgx/v5 + pgxpool"]
+    CODEC["statecodec — Plain либо AES-256-GCM"] -.->|"только masking state"| RED
+    CODEC -.-> PG
+```
 
 На data-path masking state обычно живёт **в процессе**: запрос и его ответ
 обрабатываются одним обработчиком, поэтому одиночной реплике внешнее хранилище для
@@ -43,6 +70,33 @@ data-path.
   трафик. Худший случай: плейсхолдеры остаются недемаскированными, когда состояние
   записала другая реплика.
 
+Жизненный цикл одной записи (ключ — request id):
+
+```mermaid
+stateDiagram-v2
+    state "Записана (Put)" as Alive
+    state "Использована (Get)" as Used
+    state "Удалена" as Gone
+    state "Истекла" as Expired
+    [*] --> Alive: Put в конце фазы маскирования, замены непусты
+    Alive --> Alive: повторный Put тем же request id — TTL отсчитывается заново
+    Alive --> Used: Get в фазе ответа (другая реплика)
+    Used --> Gone: Delete (best-effort, конец обработки)
+    Alive --> Gone: Delete (best-effort)
+    Alive --> Expired: TTL истёк (Delete пропущен)
+    Used --> Expired: TTL истёк (Delete пропущен)
+    Gone --> [*]
+    Expired --> [*]
+    note right of Expired
+        memory: janitor раз в 1m + ленивая проверка на Get;
+        postgres: janitor 1m + фильтр expires_at на Get;
+        redis: EX на ключе
+    end note
+```
+
+Истёкшая, но ещё не вычищенная запись неотличима от отсутствующей: Get везде возвращает
+`ErrNotFound`, как только TTL прошёл, независимо от того, добрался ли уже janitor.
+
 ### Безопасность
 
 `MaskingState.Replacements` содержит **исходные чувствительные значения**. С
@@ -55,7 +109,8 @@ data-path.
 32-байтный ключ>` (сгенерируйте `openssl rand -base64 32`) шифруют сериализованный
 masking state алгоритмом **AES-256-GCM** перед отправкой во внешний бэкенд
 (`internal/repository/statecodec`, подключается фабрикой к `redis` и `postgres`; no-op
-для `in_memory`). Отсутствующий или битый ключ ломает старт; ключ не логируется.
+для `in_memory`). Отсутствующий или битый ключ ломает старт; ключ не логируется. Обе
+env-переменные — в справочнике [../configuration/](../configuration/).
 
 Сохранённое значение становится JSON-конвертом — всё ещё валидный JSONB, поэтому схема
 postgres не меняется:

@@ -18,8 +18,19 @@ make demo-up / demo-down   # quickstart-стек compose
 go test ./internal/controller/gateway/   # тесты data-path
 ```
 
+Бинарь с консолью — двухступенчатая сборка: SPA попадает в `frontend/dist`, откуда
+её подхватывает `//go:embed all:dist` (`frontend/embed.go`); `make docker-build`
+делает то же самое внутри стадии `node:22-alpine` Dockerfile.
+
+```mermaid
+flowchart LR
+    fe["frontend/ (React + Vite)"] -->|"make frontend"| dist["frontend/dist"]
+    dist -->|"go:embed all:dist"| bin["bin/guardrails-llm-filter"]
+    gosrc["Go-исходники"] -->|"make build"| bin
+```
+
 CI: `.github/workflows/ci.yml` — build + `go test -race ./...`, golangci-lint, docker
-build (без push).
+build (без push), govulncheck, gitleaks-скан секретов.
 
 ## Стратегия тестирования (что есть, где)
 
@@ -49,11 +60,52 @@ mask/demask.
 
 `make demo-up` (`docker compose up --build`): guardrails-llm-filter (собран из корня репо)
 + `mock-llm` (крошечный OpenAI-совместимый echo-сервер, который логирует то, что получил,
-— т. е. маскированный текст — и отдаёт обратно, JSON или SSE). `bash demo.sh` прогоняет
-сценарий: mask/demask без стриминга, SSE, добавление кастомного правила через API и его
-срабатывание. Это самый быстрый сквозной способ проверить изменение data-path: лог mock
-должен показывать плейсхолдеры, ответ клиенту — оригиналы, `x-guardrails-data-types-triggered`
-должен присутствовать.
+— т. е. маскированный текст — и отдаёт обратно, JSON или SSE). Топология:
+
+```mermaid
+flowchart LR
+    client["demo.sh / curl"]
+    browser["Браузер"]
+    subgraph gwc ["guardrails-llm-filter"]
+        dp["data-plane :8080"]
+        mgmt["management API + консоль :9080"]
+        metrics["метрики :9090"]
+    end
+    mock["mock-llm :8000<br/>(echo, JSON и SSE)"]
+    client -->|"запрос с PII"| dp
+    dp -->|"маскированный запрос"| mock
+    mock -->|"эхо с плейсхолдерами"| dp
+    dp -->|"демаскированный ответ"| client
+    client -->|"правила / настройки / аудит"| mgmt
+    browser -->|"веб-консоль"| mgmt
+```
+
+`bash demo.sh` прогоняет сценарий: mask/demask без стриминга, SSE (`/v1/chat/completions`
+и `/v1/responses`), добавление кастомного правила через API и его срабатывание, выборка
+аудит-записей. Это самый быстрый сквозной способ проверить изменение data-path
+(подробно о пути запроса — [architecture/request-lifecycle.md](../architecture/request-lifecycle.md)):
+лог mock должен показывать плейсхолдеры, ответ клиенту — оригиналы,
+`x-guardrails-data-types-triggered` должен присутствовать. Веб-консоль —
+`http://localhost:9080`; аудит в демо включён, причём
+`GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS=plain` хранит оригиналы значений за
+плейсхолдерами — только для демо, в проде `off` или `encrypted`.
+
+## Dev-цикл консоли (frontend)
+
+Два процесса: Go-сервис отдаёт management API на `:9080`, Vite dev-сервер
+(`npm run dev`, `:5173`, hot reload) проксирует `/v1` в него —
+`frontend/vite.config.ts`, target из `GUARDRAILS_API_URL` (по умолчанию
+`http://localhost:9080`). Та же same-origin-модель, что и в проде; пересобирать
+Go-бинарь при правках UI не нужно.
+
+```sh
+GUARDRAILS_AUDIT_ENABLED=true ./bin/guardrails-llm-filter   # 1) API на :9080
+cd frontend && npm run dev                                   # 2) консоль на :5173
+```
+
+Типы API генерируются из `frontend/spec/openapi.yaml` (`npm run gen`, запускается и в
+`npm run build`) — при изменении management API обновите спеку. Подробности —
+[frontend/README.md](../../frontend/README.md).
 
 ## Подводные камни
 
