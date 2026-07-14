@@ -391,7 +391,7 @@ export const t = {
       step2: 'Dashboards → New → Import.',
       step3: 'Загрузите JSON из репозитория:',
       step4: 'Выберите ваш Prometheus data source и нажмите Import.',
-      docHint: 'Пошаговая инструкция с примерами — docs/monitoring.md.',
+      docHint: 'Пошаговая инструкция с примерами — docs/monitoring.',
     },
   },
 } as const;

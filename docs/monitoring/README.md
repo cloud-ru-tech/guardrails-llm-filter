@@ -69,12 +69,11 @@ rule_files:
 
 ## 3. Импортировать дашборд Grafana
 
-Пример дашборда лежит рядом: [`grafana-dashboard.json`](grafana-dashboard.json)
-(каноничный файл — [`deploy/grafana/dashboard.json`](../../deploy/grafana/dashboard.json)).
+Готовый дашборд — [`deploy/grafana/dashboard.json`](../../deploy/grafana/dashboard.json).
 
 1. Connections → Data sources → добавьте ваш Prometheus.
 2. Dashboards → New → **Import**.
-3. Загрузите `grafana-dashboard.json` (или вставьте его содержимое).
+3. Загрузите `deploy/grafana/dashboard.json` (или вставьте его содержимое).
 4. Выберите Prometheus data source → **Import**.
 
 Что внутри (14 панелей в четырёх группах):

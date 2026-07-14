@@ -15,12 +15,6 @@
 | [monitoring/](monitoring/) | Пошаговое подключение Prometheus и Grafana, готовые алерты, пример дашборда |
 | [development/](development/) | Сборка/тесты/линт, стратегия тестирования, генерируемые файлы, демо |
 
-Для удобства в корне `docs/` есть плоские алиасы-симлинки на входной файл каждого
-раздела: [architecture.md](architecture.md), [configuration.md](configuration.md),
-[rules-engine.md](rules-engine.md), [storage.md](storage.md), [api.md](api.md),
-[operations.md](operations.md), [monitoring.md](monitoring.md),
-[development.md](development.md).
-
 ## Коротко о сервисе
 
 Сервис стоит между вашими клиентами и LLM-провайдером: клиенты направляют запросы в
