@@ -1,0 +1,28 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background);
+  color: var(--sys-neutral-text-main);
+  font-family: var(--sans-body-s-font-family, system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.sizeS {
+  padding: 1px 6px;
+  font-size: 12px;
+  line-height: 16px;
+  gap: 5px;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}

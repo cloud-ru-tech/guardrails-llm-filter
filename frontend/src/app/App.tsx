@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, BrowserRouter, Routes } from 'react-router-dom';
 
 import { AuditPage } from '@/pages/audit/AuditPage';
+import { MonitoringPage } from '@/pages/monitoring/MonitoringPage';
 import { RulesPage } from '@/pages/rules/RulesPage';
 import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { TesterPage } from '@/pages/tester/TesterPage';
@@ -41,6 +42,7 @@ export function App() {
             <Route path="/tester" element={<TesterPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Route>
         </Routes>

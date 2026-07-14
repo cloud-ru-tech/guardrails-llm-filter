@@ -1,32 +1,45 @@
 import { Alert } from '@snack-uikit/alert';
 import { ButtonFilled, ButtonOutline } from '@snack-uikit/button';
+import { ChipToggle } from '@snack-uikit/chips';
 import { FieldSelect, FieldText } from '@snack-uikit/fields';
 import { useMemo, useState } from 'react';
 
 import { ApiRequestError } from '@/api/client';
 import { useAuditRecords, useDataTypes } from '@/api/hooks';
 import type { AuditQuery, AuditRecord } from '@/api/types';
-import { Badge } from '@/components/Badge';
 import { DataGrid, type Column } from '@/components/DataGrid';
+import { EntityChip } from '@/components/EntityChip';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryBoundary } from '@/components/QueryBoundary';
-import { DATA_TYPE_NAME, DATA_TYPE_TONE } from '@/domain/dataTypes';
+import { DATA_TYPE_NAME } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import { AuditDetailDrawer } from './AuditDetailDrawer';
 import styles from './AuditPage.module.scss';
+
+type ModeFilter = '' | 'enforce' | 'detect';
 
 type Filters = {
   model: string;
   path: string;
   rule_id: string;
   data_type: number;
+  mode: ModeFilter;
   since: string;
   until: string;
 };
 
-const EMPTY: Filters = { model: '', path: '', rule_id: '', data_type: 0, since: '', until: '' };
+const EMPTY: Filters = {
+  model: '',
+  path: '',
+  rule_id: '',
+  data_type: 0,
+  mode: '',
+  since: '',
+  until: '',
+};
 
+// Mode is filtered client-side (the API has no mode param) — it never enters the query.
 function toQuery(f: Filters): AuditQuery {
   return {
     model: f.model || undefined,
@@ -39,9 +52,66 @@ function toQuery(f: Filters): AuditQuery {
   };
 }
 
+type PresetKey = '1h' | '24h' | '7d' | 'all';
+
+const RANGE_PRESETS: { key: PresetKey; label: string; ms: number | null }[] = [
+  { key: '1h', label: t.audit.range.h1, ms: 3_600_000 },
+  { key: '24h', label: t.audit.range.h24, ms: 24 * 3_600_000 },
+  { key: '7d', label: t.audit.range.d7, ms: 7 * 24 * 3_600_000 },
+  { key: 'all', label: t.audit.range.all, ms: null },
+];
+
+/** RFC3339 (state) → `datetime-local` value in the local clock, with seconds. */
+function toLocalInput(rfc: string): string {
+  if (!rfc) return '';
+  const d = new Date(rfc);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(
+    d.getMinutes(),
+  )}:${p(d.getSeconds())}`;
+}
+
+/**
+ * `datetime-local` value → RFC3339 (UTC). Unparseable input is passed through
+ * as-is — raw RFC3339 stays the advanced fallback the API accepts directly.
+ */
+function fromLocalInput(v: string): string {
+  if (!v) return '';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toISOString();
+}
+
+// "2026-07-14T09:15:23.123456Z" → "09:15:23.123"; the clock stays in UTC so it
+// never disagrees with the UTC day the row is grouped under.
+const CLOCK_RE = /T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?/;
+
+function formatClock(ts?: string): string {
+  if (!ts) return t.common.none;
+  const m = CLOCK_RE.exec(ts);
+  if (!m) return ts;
+  return `${m[1]}.${(m[2] ?? '').padEnd(3, '0').slice(0, 3)}`;
+}
+
+const DAY_FORMAT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** "2026-07-14" → «14 июля 2026» (the trailing „г.“ is dropped). */
+function formatDay(key: string): string {
+  const d = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return key || t.common.none;
+  return DAY_FORMAT.format(d).replace(/\s*г\.$/, '');
+}
+
 export function AuditPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY);
+  const [activePreset, setActivePreset] = useState<PresetKey | null>('all');
   const [applied, setApplied] = useState<AuditQuery>(toQuery(EMPTY));
+  const [appliedMode, setAppliedMode] = useState<ModeFilter>('');
   const [selected, setSelected] = useState<AuditRecord | null>(null);
 
   const dataTypesQuery = useDataTypes();
@@ -59,7 +129,7 @@ export function AuditPage() {
 
   const dataTypeOptions = useMemo(
     () => [
-      { value: 0, option: t.audit.filter.dataType },
+      { value: 0, option: t.audit.dataTypesAll },
       ...(dataTypesQuery.data ?? []).map((dt) => ({
         value: Number(dt.data_type),
         option: dt.display_name || dt.name || DATA_TYPE_NAME[Number(dt.data_type)] || String(dt.data_type),
@@ -68,43 +138,123 @@ export function AuditPage() {
     [dataTypesQuery.data],
   );
 
-  const records = useMemo(
+  const modeOptions = useMemo(
+    () => [
+      { value: '', option: t.audit.modeFilter.all },
+      { value: 'enforce', option: 'enforce' },
+      { value: 'detect', option: 'detect' },
+    ],
+    [],
+  );
+
+  const allRecords = useMemo(
     () => (audit.data?.pages ?? []).flatMap((p) => p.records ?? []),
     [audit.data],
+  );
+
+  const records = useMemo(
+    () => (appliedMode ? allRecords.filter((r) => r.mode === appliedMode) : allRecords),
+    [allRecords, appliedMode],
   );
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
 
+  const setDate = (key: 'since' | 'until', value: string) => {
+    set(key, value);
+    setActivePreset(null);
+  };
+
+  const applyPreset = (key: PresetKey) => {
+    const preset = RANGE_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    const since = preset.ms == null ? '' : new Date(Date.now() - preset.ms).toISOString();
+    const next: Filters = { ...filters, since, until: '' };
+    setFilters(next);
+    setActivePreset(key);
+    setApplied(toQuery(next));
+    setAppliedMode(next.mode);
+  };
+
+  const apply = () => {
+    setApplied(toQuery(filters));
+    setAppliedMode(filters.mode);
+  };
+
+  const reset = () => {
+    setFilters(EMPTY);
+    setActivePreset('all');
+    setApplied(toQuery(EMPTY));
+    setAppliedMode('');
+  };
+
   const auditDisabled = audit.error instanceof ApiRequestError && audit.error.status === 404;
 
+  const rfc3339Title = (value: string) =>
+    value ? `${value} — ${t.audit.rfc3339Title}` : t.audit.rfc3339Title;
+
   const columns: Column<AuditRecord>[] = [
-    { key: 'timestamp', header: t.audit.col.timestamp, render: (r) => <span className={styles.mono}>{r.timestamp}</span> },
-    { key: 'model', header: t.audit.col.model, render: (r) => r.model || t.common.none },
-    { key: 'path', header: t.audit.col.path, render: (r) => <span className={styles.mono}>{r.path}</span> },
     {
-      key: 'mode',
-      header: t.audit.col.mode,
-      render: (r) => <Badge tone={r.mode === 'detect' ? 'yellow' : 'green'}>{r.mode ?? '—'}</Badge>,
+      key: 'timestamp',
+      header: t.audit.col.timestamp,
+      mono: true,
+      width: '128px',
+      render: (r) => <span title={r.timestamp}>{formatClock(r.timestamp)}</span>,
     },
     {
-      key: 'rules',
-      header: t.audit.col.rules,
-      render: (r) => (r.triggered_rule_ids ?? []).length,
-      align: 'center',
+      key: 'model',
+      header: t.audit.col.model,
+      render: (r) => r.model || t.common.none,
+    },
+    {
+      key: 'path',
+      header: t.audit.col.path,
+      mono: true,
+      render: (r) => r.path || t.common.none,
     },
     {
       key: 'data_types',
       header: t.audit.col.dataTypes,
-      render: (r) => (
-        <div className={styles.chips}>
-          {(r.triggered_data_types ?? []).map((id) => (
-            <Badge key={id} tone={DATA_TYPE_TONE[id] ?? 'neutral'}>
-              {dtLabel(id)}
-            </Badge>
-          ))}
-        </div>
-      ),
+      render: (r) => {
+        const ids = r.triggered_data_types ?? [];
+        if (ids.length === 0) return <span className={styles.noneCell}>{t.common.none}</span>;
+        const shown = ids.slice(0, 2);
+        const rest = ids.slice(2);
+        return (
+          <div className={styles.chips}>
+            {shown.map((id) => (
+              <EntityChip key={id} dataType={id} size="s">
+                {dtLabel(id)}
+              </EntityChip>
+            ))}
+            {rest.length > 0 && (
+              <span className={styles.moreChip} title={rest.map(dtLabel).join(', ')}>
+                +{rest.length}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'replacements',
+      header: t.audit.col.replacements,
+      mono: true,
+      align: 'right',
+      width: '96px',
+      render: (r) => (r.replacements ?? []).length,
+    },
+    {
+      // Detect is the exception worth marking; enforce is the default and stays quiet.
+      key: 'mode',
+      header: t.audit.col.mode,
+      width: '88px',
+      render: (r) =>
+        r.mode === 'detect' ? (
+          <span className={styles.detectPill} title={t.audit.detectHint}>
+            detect
+          </span>
+        ) : null,
     },
   ];
 
@@ -117,28 +267,88 @@ export function AuditPage() {
       ) : (
         <>
           <div className={styles.filters}>
-            <FieldText inputMode="text" label={t.audit.filter.model} value={filters.model} onChange={(v) => set('model', v)} />
-            <FieldText inputMode="text" label={t.audit.filter.path} value={filters.path} onChange={(v) => set('path', v)} />
-            <FieldText inputMode="text" label={t.audit.filter.ruleId} value={filters.rule_id} onChange={(v) => set('rule_id', v)} />
-            <FieldSelect
-              selection="single"
-              label={t.audit.filter.dataType}
-              options={dataTypeOptions}
-              value={filters.data_type}
-              onChange={(v) => set('data_type', v == null ? 0 : Number(v))}
-            />
-            <FieldText inputMode="text" label={t.audit.filter.since} value={filters.since} onChange={(v) => set('since', v)} placeholder="2026-01-01T00:00:00Z" />
-            <FieldText inputMode="text" label={t.audit.filter.until} value={filters.until} onChange={(v) => set('until', v)} placeholder="2026-12-31T23:59:59Z" />
+            <div className={styles.rangeChips} role="group" aria-label={t.audit.range.label}>
+              {RANGE_PRESETS.map((p) => (
+                <ChipToggle
+                  key={p.key}
+                  size="s"
+                  label={p.label}
+                  checked={activePreset === p.key}
+                  onChange={() => applyPreset(p.key)}
+                />
+              ))}
+            </div>
+
+            <label className={styles.dateField}>
+              <span className={styles.dateLabel}>{t.audit.sinceShort}</span>
+              <input
+                type="datetime-local"
+                step={1}
+                className={styles.dateInput}
+                value={toLocalInput(filters.since)}
+                title={rfc3339Title(filters.since)}
+                onChange={(e) => setDate('since', fromLocalInput(e.target.value))}
+              />
+            </label>
+            <label className={styles.dateField}>
+              <span className={styles.dateLabel}>{t.audit.untilShort}</span>
+              <input
+                type="datetime-local"
+                step={1}
+                className={styles.dateInput}
+                value={toLocalInput(filters.until)}
+                title={rfc3339Title(filters.until)}
+                onChange={(e) => setDate('until', fromLocalInput(e.target.value))}
+              />
+            </label>
+
+            <div className={styles.field}>
+              <FieldText
+                inputMode="text"
+                label={t.audit.filter.model}
+                value={filters.model}
+                onChange={(v) => set('model', v)}
+              />
+            </div>
+            <div className={styles.field}>
+              <FieldText
+                inputMode="text"
+                label={t.audit.filter.path}
+                value={filters.path}
+                onChange={(v) => set('path', v)}
+              />
+            </div>
+            <div className={styles.field}>
+              <FieldText
+                inputMode="text"
+                label={t.audit.filter.ruleId}
+                value={filters.rule_id}
+                onChange={(v) => set('rule_id', v)}
+              />
+            </div>
+            <div className={styles.field}>
+              <FieldSelect
+                selection="single"
+                label={t.audit.filter.dataType}
+                options={dataTypeOptions}
+                value={filters.data_type}
+                onChange={(v) => set('data_type', v == null ? 0 : Number(v))}
+              />
+            </div>
+            <div className={styles.fieldNarrow}>
+              <FieldSelect
+                selection="single"
+                label={t.audit.modeFilter.label}
+                options={modeOptions}
+                value={filters.mode}
+                onChange={(v) => set('mode', (v ?? '') as ModeFilter)}
+              />
+            </div>
           </div>
+
           <div className={styles.filterActions}>
-            <ButtonFilled label={t.common.apply} onClick={() => setApplied(toQuery(filters))} />
-            <ButtonOutline
-              label={t.common.cancel}
-              onClick={() => {
-                setFilters(EMPTY);
-                setApplied(toQuery(EMPTY));
-              }}
-            />
+            <ButtonFilled label={t.common.apply} onClick={apply} />
+            <ButtonOutline label={t.common.cancel} onClick={reset} />
           </div>
 
           <QueryBoundary isLoading={audit.isLoading} error={audit.error} onRetry={() => audit.refetch()}>
@@ -148,6 +358,8 @@ export function AuditPage() {
               rowKey={(r) => r.request_id ?? String(r.timestamp)}
               onRowClick={(r) => setSelected(r)}
               emptyLabel={t.audit.empty}
+              groupBy={(r) => (r.timestamp ?? '').slice(0, 10)}
+              renderGroupHeader={formatDay}
             />
             {audit.hasNextPage && (
               <div className={styles.loadMore}>

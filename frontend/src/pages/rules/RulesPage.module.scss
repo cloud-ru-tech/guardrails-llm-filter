@@ -11,26 +11,55 @@
   flex: 1;
 }
 
-.mono {
-  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
-  font-size: 14px;
+// Toolbar counter — mono instrument voice, like every number in the system.
+.count {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-support);
+  margin-left: auto;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+// «Правило» cell: custom rules = sans name + mono id below; builtin = one mono id line.
+.ruleCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ruleName {
+  font-weight: 500;
   color: var(--sys-neutral-text-main);
 }
 
-.name {
-  font-weight: 500;
+.ruleId {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  word-break: break-all;
+}
+
+.ruleIdSub {
+  font-size: 12px;
+  color: var(--sys-neutral-text-support);
+}
+
+.ruleGroup {
+  color: var(--sys-neutral-text-support);
 }
 
 .actions {
   display: flex;
   gap: 4px;
   justify-content: flex-end;
-}
-
-.count {
-  color: var(--sys-neutral-text-support);
-  margin-left: auto;
-  align-self: center;
 }
 
 .hiddenInput {
@@ -49,6 +78,18 @@
   color: var(--sys-primary-accent-default);
 }
 
+.bulkLabel {
+  font-family: var(--sans-body-s-font-family, system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.bulkCount {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .bulkActions {
   display: flex;
   gap: 8px;
@@ -57,6 +98,15 @@
 .mutedText {
   color: var(--sys-neutral-text-support);
   font-size: 14px;
+}
+
+// Entity dot inside select options — the label always sits right next to it.
+.entityDot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .effectiveGroups {
@@ -84,8 +134,29 @@
   gap: 10px;
 }
 
+.effectiveCount {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-support);
+}
+
 .effectiveChips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+// Mono id chip in the effective ruleset view.
+.effectiveChip {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  padding: 2px 8px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 6px;
+  background: var(--sys-neutral-background);
+  white-space: nowrap;
 }

@@ -2,46 +2,90 @@
 // up on the same left edge.
 $nav-inset: 12px;
 
+// Viewport-locked shell: the page itself never scrolls — .content is the only
+// scroll container, so the rail and topbar always stay with the user.
 .shell {
   display: grid;
-  grid-template-columns: 264px 1fr;
-  min-height: 100vh;
+  grid-template-columns: 248px 1fr;
+  height: 100vh;
+  height: 100dvh;
 }
 
+// The rail follows the theme: its colors are aliases onto the same --sys-*
+// tokens the rest of the app wears, so light theme gets a light sidebar and
+// dark theme gets the same surface family as the content — one color scheme.
 .sidebar {
+  --rail-bg: var(--sys-neutral-background);
+  --rail-text: var(--sys-neutral-text-support);
+  --rail-support: var(--sys-neutral-text-support);
+  --rail-title: var(--sys-neutral-text-main);
+  --rail-hairline: var(--sys-neutral-decor-default);
+  --rail-hover-bg: var(--sys-neutral-background-opacity);
+  --rail-active-text: var(--sys-primary-accent-default);
+  --rail-active-bg: var(--sys-primary-background);
+
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px 12px;
-  border-right: 1px solid var(--sys-neutral-decor-default);
-  background: var(--sys-neutral-background);
+  background: var(--rail-bg);
+  border-right: 1px solid var(--rail-hairline);
+  overflow: hidden;
 }
 
+// Same fixed height as the topbar, so the two hairlines meet in one
+// continuous line across the whole viewport.
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px $nav-inset 16px;
-  border-bottom: 1px solid var(--sys-neutral-decor-default);
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--rail-hairline);
+  color: var(--rail-title);
 }
 
-.brandMark {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--sys-primary-accent-default);
+// The glyph sits in a tinted tile so the header reads as a designed lockup,
+// not a floating icon next to text.
+.brandLogoTile {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--sys-primary-background);
 }
 
 .brandLogo {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+// The product descriptor wears the mono-eyebrow voice — the one ALL-CAPS role.
+.brandSubtitle {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rail-support);
+  white-space: nowrap;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 12px;
+  // The nav (not the header) scrolls if it outgrows a short viewport.
+  overflow-y: auto;
 }
 
 .navLink {
@@ -51,7 +95,7 @@ $nav-inset: 12px;
   gap: 12px;
   padding: 10px $nav-inset;
   border-radius: 8px;
-  color: var(--sys-neutral-text-support);
+  color: var(--rail-text);
   text-decoration: none;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
@@ -64,16 +108,16 @@ $nav-inset: 12px;
   }
 
   &:hover {
-    background: var(--sys-neutral-background-opacity);
-    color: var(--sys-neutral-text-main);
+    background: var(--rail-hover-bg);
+    color: var(--rail-title);
   }
 }
 
 .navLinkActive {
-  background: var(--sys-primary-background);
-  color: var(--sys-primary-accent-default);
+  background: var(--rail-active-bg);
+  color: var(--rail-active-text);
 
-  // Accent rail on the active item.
+  // Accent rail on the active item — flat, no glow.
   &::before {
     content: '';
     position: absolute;
@@ -83,12 +127,12 @@ $nav-inset: 12px;
     width: 3px;
     height: 20px;
     border-radius: 0 3px 3px 0;
-    background: var(--sys-primary-accent-default);
+    background: var(--rail-active-text);
   }
 
   &:hover {
-    background: var(--sys-primary-background);
-    color: var(--sys-primary-accent-default);
+    background: var(--rail-active-bg);
+    color: var(--rail-active-text);
   }
 }
 
@@ -96,22 +140,26 @@ $nav-inset: 12px;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  // Grid items default to min-height:auto — without this the column overflows
+  // the viewport instead of letting .content scroll.
+  min-height: 0;
 }
 
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
-  padding: 12px 24px;
+  justify-content: flex-end;
+  gap: 10px;
+  height: 52px;
+  flex-shrink: 0;
+  padding: 0 24px;
   border-bottom: 1px solid var(--sys-neutral-decor-default);
 }
 
 .status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -132,15 +180,111 @@ $nav-inset: 12px;
   box-shadow: 0 0 0 3px var(--sys-red-background);
 }
 
-.statusText {
+// The instrument voice: version and mode read as small mono pills.
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background);
   color: var(--sys-neutral-text-support);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.modeEnforce {
+  border-color: transparent;
+  background: var(--sys-primary-background);
+  color: var(--sys-primary-text-main);
+  font-weight: 600;
+}
+
+// Detect = protection reduced: amber text in an outlined pill (never a dot —
+// the health indicator stays the topbar's only dot).
+.modeDetect {
+  border-color: var(--sys-yellow-accent-default);
+  background: transparent;
+  color: var(--sys-yellow-text-main);
+  font-weight: 600;
+  cursor: help;
 }
 
 .content {
   flex: 1;
   padding: 24px 32px 48px;
   overflow: auto;
+}
+
+// Mobile floor: the rail becomes a fixed bottom bar of icon+label items.
+@media (max-width: 767px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    border-top: 1px solid var(--rail-hairline);
+    overflow-y: visible;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .nav {
+    flex: 1;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0;
+    overflow-y: visible;
+  }
+
+  .navLink {
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px 10px;
+    border-radius: 0;
+    font-size: 11px;
+
+    span {
+      font-size: 11px;
+      line-height: 14px;
+    }
+  }
+
+  .navLinkActive::before {
+    // The accent rail flips to the top edge on the bottom bar.
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+  }
+
+  .content {
+    padding: 16px 16px 88px;
+  }
+
+  .topbar {
+    padding: 8px 16px;
+  }
+}
+
+@media (max-width: 479px) {
+  .versionPill {
+    display: none;
+  }
 }

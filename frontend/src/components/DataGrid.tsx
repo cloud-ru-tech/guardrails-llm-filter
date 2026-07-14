@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import styles from './DataGrid.module.scss';
 
@@ -8,6 +8,8 @@ export type Column<T> = {
   render: (row: T) => ReactNode;
   width?: string;
   align?: 'left' | 'center' | 'right';
+  /** Renders the cell in the mono instrument voice (ids, timestamps, counts). */
+  mono?: boolean;
 };
 
 type DataGridProps<T> = {
@@ -16,9 +18,27 @@ type DataGridProps<T> = {
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   emptyLabel?: string;
+  /**
+   * Groups consecutive rows under full-width header rows (e.g. audit records
+   * by day). Rows are grouped in the order given — sort them first. The key
+   * changes trigger a header; duplicate keys across "load more" appends are
+   * fine as long as the flattened list stays sorted.
+   */
+  groupBy?: (row: T) => string;
+  renderGroupHeader?: (key: string) => ReactNode;
 };
 
-export function DataGrid<T>({ columns, rows, rowKey, onRowClick, emptyLabel }: DataGridProps<T>) {
+export function DataGrid<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  emptyLabel,
+  groupBy,
+  renderGroupHeader,
+}: DataGridProps<T>) {
+  let lastGroup: string | undefined;
+
   return (
     <div className={styles.wrap}>
       <table className={styles.table}>
@@ -39,19 +59,36 @@ export function DataGrid<T>({ columns, rows, rowKey, onRowClick, emptyLabel }: D
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr
-                key={rowKey(row)}
-                className={onRowClick ? styles.clickable : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-              >
-                {columns.map((c) => (
-                  <td key={c.key} style={{ textAlign: c.align ?? 'left' }}>
-                    {c.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))
+            rows.map((row) => {
+              const group = groupBy?.(row);
+              const isNewGroup = groupBy != null && group !== lastGroup;
+              lastGroup = group;
+              return (
+                <Fragment key={rowKey(row)}>
+                  {isNewGroup && (
+                    <tr className={styles.groupRow}>
+                      <td colSpan={columns.length}>
+                        {renderGroupHeader ? renderGroupHeader(group!) : group}
+                      </td>
+                    </tr>
+                  )}
+                  <tr
+                    className={onRowClick ? styles.clickable : undefined}
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  >
+                    {columns.map((c) => (
+                      <td
+                        key={c.key}
+                        className={c.mono ? styles.mono : undefined}
+                        style={{ textAlign: c.align ?? 'left' }}
+                      >
+                        {c.render(row)}
+                      </td>
+                    ))}
+                  </tr>
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>

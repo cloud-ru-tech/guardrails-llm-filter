@@ -9,22 +9,21 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--sans-body-m-font-family, system-ui, sans-serif);
-  font-size: 15px;
+  font-size: 14px;
 
+  // Sentence case — ALL-CAPS is reserved for the mono-eyebrow role.
   th {
     text-align: left;
-    padding: 12px 16px;
+    padding: 10px 16px;
     color: var(--sys-neutral-text-support);
     font-weight: 500;
     font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
     border-bottom: 1px solid var(--sys-neutral-decor-default);
     background: var(--sys-neutral-background-opacity);
   }
 
   td {
-    padding: 12px 16px;
+    padding: 10px 16px;
     color: var(--sys-neutral-text-main);
     border-bottom: 1px solid var(--sys-neutral-decor-default);
     vertical-align: middle;
@@ -33,6 +32,23 @@
   tbody tr:last-child td {
     border-bottom: none;
   }
+}
+
+.mono {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.groupRow td {
+  padding: 6px 16px;
+  background: var(--sys-neutral-background-opacity);
+  color: var(--sys-neutral-text-support);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--sys-neutral-decor-default);
 }
 
 .clickable {

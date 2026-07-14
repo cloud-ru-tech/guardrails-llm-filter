@@ -1,22 +1,55 @@
 .masked {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 8px;
   background: var(--sys-neutral-background-opacity);
   border: 1px solid var(--sys-neutral-decor-default);
   font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--sys-neutral-text-main);
+  max-height: 48vh;
+  overflow: auto;
 }
 
+.maskedS {
+  font-size: 12.5px;
+  padding: 8px 10px;
+}
+
+// The mask-chip. Text uses the DS primary-text token (contrast-safe on the
+// primary tint in both themes); the tick carries the entity color — never
+// color-alone, the placeholder text itself names the data type.
 .placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
   background: var(--sys-primary-background);
-  color: var(--sys-primary-accent-default);
+  color: var(--sys-primary-text-main);
   border-radius: 4px;
-  padding: 1px 4px;
+  padding: 1px 5px 1px 4px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sizeS {
+  padding: 0 4px 0 3px;
+  border-radius: 3px;
+}
+
+.tick {
+  width: 2px;
+  height: 1em;
+  border-radius: 1px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.bracket {
+  opacity: 0.55;
+  font-weight: 400;
 }
 
 // A placeholder whose original value is available reveals it on hover.

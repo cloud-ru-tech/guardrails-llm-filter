@@ -2,18 +2,24 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
+// The mono-eyebrow: the system's single ALL-CAPS role.
 .sectionTitle {
-  color: var(--sys-neutral-text-support);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  color: var(--sys-neutral-text-support);
 }
 
 .chips {
@@ -21,33 +27,118 @@
   flex-wrap: wrap;
   gap: 6px;
   color: var(--sys-neutral-text-support);
+  font-size: 13px;
 }
 
-.muted {
+// Triggered rule ids read in the instrument voice: quiet mono chips.
+.ruleChip {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background-opacity);
+  color: var(--sys-neutral-text-main);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Zero-matches: a neutral banner — deliberately not a success-green or an
+// alert; a clean pass is the normal case, not an event.
+.banner {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background-opacity);
+}
+
+.bannerCount {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--sys-neutral-text-main);
+  white-space: nowrap;
+}
+
+.bannerText {
+  font-size: 13px;
+  line-height: 20px;
   color: var(--sys-neutral-text-support);
+}
+
+// The substitution table scrolls inside its own container: horizontally when
+// values are long, vertically past ~48vh (long inputs must not blow the page).
+.tableWrap {
+  overflow: auto;
+  max-height: 48vh;
+  min-width: 0;
+  border: 1px solid var(--sys-neutral-decor-default);
+  border-radius: 8px;
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+  min-width: 440px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
 
   th,
   td {
     text-align: left;
-    padding: 8px 10px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--sys-neutral-decor-default);
     vertical-align: top;
   }
 
+  // Sentence-case header, sticky under the wrap's own scroll.
   th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--sys-neutral-background);
     color: var(--sys-neutral-text-support);
+    font-size: 12.5px;
+    line-height: 18px;
     font-weight: 500;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
   }
 }
 
-.mono {
-  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
-  font-size: 14px;
-  word-break: break-all;
+.colPlaceholder {
+  width: 30%;
+}
+
+.colRule {
+  width: 26%;
+}
+
+.cell {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timing {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-support);
 }

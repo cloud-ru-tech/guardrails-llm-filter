@@ -33,6 +33,15 @@ a {
   outline-offset: 2px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 // Label+icon buttons (ButtonFilled/Outline/Tonal) always render the icon *after*
 // the label — the DS omits `iconPosition` on them. We prefer the icon to *lead*
 // the label (↑ Import, + Create), the conventional action-button pattern, so we

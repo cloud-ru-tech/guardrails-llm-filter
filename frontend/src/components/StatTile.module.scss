@@ -8,14 +8,19 @@
   gap: 6px;
 }
 
+// Sentence case — ALL-CAPS is reserved for the single mono-eyebrow role.
 .label {
   color: var(--sys-neutral-text-support);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
+// Numbers are data: they speak mono, tabular.
 .value {
+  font-family: var(--mono-headline-m-font-family, ui-monospace, monospace);
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--sys-neutral-text-main);
 }
@@ -26,4 +31,36 @@
 
 .hint {
   color: var(--sys-neutral-text-support);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+// Instrument readout: compact value-over-label, used in hero strips.
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.readoutValue {
+  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  white-space: nowrap;
+}
+
+.readoutLabel {
+  color: var(--sys-neutral-text-support);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.danger {
+  color: var(--sys-red-text-main, #cb3f3e);
+  font-weight: 700;
 }

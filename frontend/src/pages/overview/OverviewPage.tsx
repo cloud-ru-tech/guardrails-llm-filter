@@ -2,6 +2,7 @@ import { Alert } from '@snack-uikit/alert';
 import { ButtonOutline } from '@snack-uikit/button';
 import { UpdateSVG } from '@snack-uikit/icons';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Area,
   AreaChart,
@@ -18,19 +19,49 @@ import {
 
 import { ApiRequestError } from '@/api/client';
 import { useDataTypes, useMetricsSummary, useRecentAudit } from '@/api/hooks';
-import type { Latency } from '@/api/types';
-import { Badge } from '@/components/Badge';
+import type { AuditRecord, Latency } from '@/api/types';
 import { Card } from '@/components/Card';
+import { MaskChip } from '@/components/MaskedText';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryBoundary } from '@/components/QueryBoundary';
-import { StatTile } from '@/components/StatTile';
-import { CHART_COLOR, DATA_TYPE_NAME, DATA_TYPE_ORDER, DATA_TYPE_TONE } from '@/domain/dataTypes';
+import { Readout } from '@/components/StatTile';
+import { CHART_COLOR, DATA_TYPE_NAME, DATA_TYPE_ORDER } from '@/domain/dataTypes';
 import { t } from '@/i18n/strings';
 
 import styles from './OverviewPage.module.scss';
 
 const WINDOW = 200;
-const AXIS = { fill: 'var(--chart-axis)', fontSize: 12 };
+const RECENT_COUNT = 5;
+
+// Axes speak mono, like every number on this console.
+const AXIS = {
+  fill: 'var(--chart-axis)',
+  fontSize: 12,
+  fontFamily: 'var(--mono-body-s-font-family, ui-monospace, monospace)',
+};
+
+const nf = new Intl.NumberFormat('ru-RU');
+const fmt = (n: number) => nf.format(n);
+
+// NBSP instead of spaces: recharts' <Text> otherwise wraps a two-word label
+// onto a second line inside the 140px axis; the full name lives in the tooltip.
+const ellipsize = (v: string) =>
+  (v.length > 18 ? `${v.slice(0, 17)}…` : v).replace(/ /g, ' ');
+
+function fmtTime(ts?: string): string {
+  if (!ts) return t.common.none;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return t.common.none;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** Adaptive latency format: sub-millisecond quantiles read «<1 мс». */
+function fmtLatency(seconds?: number): string | null {
+  if (seconds == null) return null;
+  const ms = seconds * 1000;
+  return ms < 1 ? t.overview.hero.subMs : t.overview.hero.ms(Math.round(ms));
+}
 
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
@@ -46,87 +77,210 @@ function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) 
   );
 }
 
-/** Lifetime service counters from GET /v1/metrics/summary (independent of audit). */
-function LifetimeMetrics({ dtLabel }: { dtLabel: (id: number) => string }) {
-  const metrics = useMetricsSummary();
-  const data = metrics.data;
-  // Silently skip when metrics are unavailable — this only augments the page.
-  if (metrics.isError || !data) return null;
+type AuditAgg = {
+  total: number;
+  enforce: number;
+  detect: number;
+  replacements: number;
+  dataTypeData: { id: number; name: string; value: number }[];
+  topRules: { name: string; value: number }[];
+  overTime: { time: string; count: number }[];
+};
 
-  const maskedByMode = data.requests_masked_total ?? {};
-  const maskedTotal = Object.values(maskedByMode).reduce((a, b) => a + b, 0);
-  const enforce = maskedByMode.enforce ?? 0;
-  const detect = maskedByMode.detect ?? 0;
-  const passthrough = Object.values(data.passthrough_total ?? {}).reduce((a, b) => a + b, 0);
+/**
+ * HERO: the lifetime instrument panel (GET /v1/metrics/summary). Degrades but
+ * never disappears — when metrics are unavailable it recomputes from the audit
+ * window (eyebrow says so); when both are unavailable it shows em-dashes.
+ */
+function Hero({
+  metrics,
+  agg,
+  auditAvailable,
+}: {
+  metrics: ReturnType<typeof useMetricsSummary>;
+  agg: AuditAgg;
+  auditAvailable: boolean;
+}) {
+  const m = metrics.data;
+  const metricsSettled = !metrics.isPending;
+  const base: 'metrics' | 'audit' | 'none' = m
+    ? 'metrics'
+    : metricsSettled && auditAvailable
+      ? 'audit'
+      : 'none';
 
-  // Use the highest-volume latency bucket as the representative sample.
-  const latency = Object.values(data.latency_seconds ?? {}).reduce<Latency | null>(
-    (best, l) => (best == null || (l.count ?? 0) > (best.count ?? 0) ? l : best),
-    null,
-  );
-  const toMs = (s?: number) => (s == null ? null : `${Math.round(s * 1000)} ms`);
-  const p50 = toMs(latency?.p50);
-  const p95 = toMs(latency?.p95);
+  let masked: number | null = null;
+  let enforce: number | null = null;
+  let detect: number | null = null;
+  let p50: string | null = null;
+  let p95: string | null = null;
+  let latencyHint: string | undefined;
+  let passthrough: number | null = null;
+  let passthroughHint: string | undefined;
+  let replacements: number | null = null;
+  let replacementsHint: string | undefined;
 
-  const topRules = [...(data.rule_triggers_total ?? [])]
-    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
-    .slice(0, 6);
-  const topDataTypes = [...(data.data_type_triggers_total ?? [])]
-    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
-    .slice(0, 6);
+  if (base === 'metrics' && m) {
+    const byMode = m.requests_masked_total ?? {};
+    masked = Object.values(byMode).reduce((a, b) => a + b, 0);
+    enforce = byMode.enforce ?? 0;
+    detect = byMode.detect ?? 0;
+    passthrough = Object.values(m.passthrough_total ?? {}).reduce((a, b) => a + b, 0);
+    replacements = (m.rule_triggers_total ?? []).reduce((a, r) => a + (r.count ?? 0), 0);
+
+    // The highest-volume latency bucket is the representative sample.
+    const bucket = Object.entries(m.latency_seconds ?? {}).reduce<[string, Latency] | null>(
+      (best, cur) => (best == null || (cur[1].count ?? 0) > (best[1].count ?? 0) ? cur : best),
+      null,
+    );
+    p50 = fmtLatency(bucket?.[1].p50);
+    p95 = fmtLatency(bucket?.[1].p95);
+    latencyHint =
+      bucket && (p50 != null || p95 != null)
+        ? t.overview.hero.latencyBucket(bucket[0])
+        : t.overview.hero.noTraffic;
+  } else if (base === 'audit') {
+    masked = agg.total;
+    enforce = agg.enforce;
+    detect = agg.detect;
+    replacements = agg.replacements;
+    latencyHint = t.overview.hero.noMetrics;
+    passthroughHint = t.overview.hero.noMetrics;
+    replacementsHint = undefined;
+  } else {
+    latencyHint = t.overview.hero.noMetrics;
+    passthroughHint = t.overview.hero.noMetrics;
+    replacementsHint = t.overview.hero.noMetrics;
+  }
+
+  const splitTotal = (enforce ?? 0) + (detect ?? 0);
 
   return (
-    <div className={styles.lifetime}>
-      <div className={styles.statGrid}>
-        <StatTile label={t.overview.lifetime.maskedTotal} value={maskedTotal} accent />
-        <StatTile label={t.overview.lifetime.enforce} value={enforce} />
-        <StatTile label={t.overview.lifetime.detect} value={detect} />
-        <StatTile label={t.overview.lifetime.passthrough} value={passthrough} />
-        <StatTile label={t.overview.lifetime.latencyP50} value={p50 ?? t.common.none} />
-        <StatTile label={t.overview.lifetime.latencyP95} value={p95 ?? t.common.none} />
-      </div>
+    <Card
+      eyebrow={
+        base === 'audit' ? t.overview.hero.eyebrowWindow(WINDOW) : t.overview.hero.eyebrowLifetime
+      }
+      className={styles.heroCard}
+    >
+      <div className={styles.heroBody}>
+        <div className={styles.heroMain}>
+          <span className={styles.heroLabel}>{t.overview.hero.masked}</span>
+          <span className={styles.heroValue}>{masked == null ? t.common.none : fmt(masked)}</span>
+        </div>
 
-      <div className={styles.lifetimeLists}>
-        <Card title={t.overview.lifetime.topRules}>
-          {topRules.length === 0 ? (
-            <span className={styles.muted}>{t.overview.lifetime.empty}</span>
-          ) : (
-            <ul className={styles.countList}>
-              {topRules.map((r) => (
-                <li key={r.label} className={styles.countRow}>
-                  <span className={styles.mono}>{r.label}</span>
-                  <span className={styles.countValue}>{r.count ?? 0}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <div className={styles.heroSplit}>
+          <div className={styles.splitCounts}>
+            <span className={styles.splitPair}>
+              <span className={styles.splitNum}>{enforce == null ? t.common.none : fmt(enforce)}</span>{' '}
+              {t.overview.hero.enforce}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className={styles.splitPair}>
+              <span className={styles.splitNum}>{detect == null ? t.common.none : fmt(detect)}</span>{' '}
+              {t.overview.hero.detect}
+            </span>
+          </div>
+          <div className={styles.splitBar} aria-hidden="true">
+            {splitTotal > 0 && (enforce ?? 0) > 0 && (
+              <span className={styles.splitEnforce} style={{ flexGrow: enforce ?? 0 }} />
+            )}
+            {splitTotal > 0 && (detect ?? 0) > 0 && (
+              <span className={styles.splitDetect} style={{ flexGrow: detect ?? 0 }} />
+            )}
+          </div>
+        </div>
 
-        <Card title={t.overview.lifetime.topDataTypes}>
-          {topDataTypes.length === 0 ? (
-            <span className={styles.muted}>{t.overview.lifetime.empty}</span>
-          ) : (
-            <ul className={styles.countList}>
-              {topDataTypes.map((d) => {
-                const id = Number(d.label);
-                const label = Number.isFinite(id) ? dtLabel(id) : String(d.label);
-                return (
-                  <li key={d.label} className={styles.countRow}>
-                    <Badge tone={DATA_TYPE_TONE[id] ?? 'neutral'}>{label}</Badge>
-                    <span className={styles.countValue}>{d.count ?? 0}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+        <div className={styles.heroReadouts}>
+          <Readout
+            label={t.overview.hero.p50}
+            value={p50 ?? t.common.none}
+            hint={latencyHint}
+          />
+          <Readout
+            label={t.overview.hero.p95}
+            value={p95 ?? t.common.none}
+            hint={latencyHint}
+          />
+          <Readout
+            label={t.overview.hero.passthrough}
+            value={passthrough == null ? t.common.none : fmt(passthrough)}
+            hint={passthroughHint}
+            tone={passthrough != null && passthrough > 0 ? 'danger' : 'default'}
+          />
+          <Readout
+            label={t.overview.hero.replacements}
+            value={replacements == null ? t.common.none : fmt(replacements)}
+            hint={replacementsHint}
+          />
+        </div>
       </div>
+    </Card>
+  );
+}
+
+/** «Топ правил» as a plain HTML bar-list — long rule ids get CSS ellipsis, not axis clipping. */
+function RuleBarList({ rules }: { rules: { name: string; value: number }[] }) {
+  if (rules.length === 0) {
+    return <span className={styles.muted}>{t.overview.section.noData}</span>;
+  }
+  const max = rules.reduce((a, r) => Math.max(a, r.value), 0);
+  return (
+    <div className={styles.ruleList}>
+      {rules.map((r) => (
+        <div key={r.name} className={styles.ruleRow}>
+          <span className={styles.ruleId} title={r.name}>
+            {r.name}
+          </span>
+          <span className={styles.ruleTrack}>
+            <span
+              className={styles.ruleFill}
+              style={{ width: max > 0 ? `max(${(r.value / max) * 100}%, 3px)` : '0' }}
+            />
+          </span>
+          <span className={styles.ruleCount}>{fmt(r.value)}</span>
+        </div>
+      ))}
     </div>
+  );
+}
+
+function RecentRow({ record }: { record: AuditRecord }) {
+  const replacements = record.replacements ?? [];
+  return (
+    <li className={styles.recentRow}>
+      <span className={styles.recentTime}>{fmtTime(record.timestamp)}</span>
+      <span className={styles.recentModel} title={record.model}>
+        {record.model || t.common.none}
+      </span>
+      {record.mode === 'detect' && (
+        <span className={styles.detectPill} title={t.status.modeDetectHint}>
+          detect
+        </span>
+      )}
+      <span className={styles.recentChips}>
+        {replacements.length === 0 ? (
+          <span className={styles.muted}>{t.overview.section.noReplacements}</span>
+        ) : (
+          replacements.map((rep, i) =>
+            rep.placeholder ? (
+              <MaskChip
+                key={`${rep.placeholder}-${i}`}
+                placeholder={rep.placeholder}
+                original={rep.original}
+                dataType={rep.data_type || undefined}
+                size="s"
+              />
+            ) : null,
+          )
+        )}
+      </span>
+    </li>
   );
 }
 
 export function OverviewPage() {
   const audit = useRecentAudit(WINDOW);
+  const metrics = useMetricsSummary();
   const dataTypesQuery = useDataTypes();
 
   const labels = useMemo(() => {
@@ -138,7 +292,7 @@ export function OverviewPage() {
   }, [dataTypesQuery.data]);
   const dtLabel = (id: number) => labels.get(id) ?? DATA_TYPE_NAME[id] ?? String(id);
 
-  const agg = useMemo(() => {
+  const agg: AuditAgg = useMemo(() => {
     const records = audit.data ?? [];
     const byDataType = new Map<number, number>();
     const byRule = new Map<string, number>();
@@ -162,6 +316,7 @@ export function OverviewPage() {
       }
     }
 
+    // Entity order (color follows the entity, not the rank).
     const dataTypeData = DATA_TYPE_ORDER.filter((id) => byDataType.has(id)).map((id) => ({
       id,
       name: dtLabel(id),
@@ -177,33 +332,17 @@ export function OverviewPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([time, count]) => ({ time, count }));
 
-    return {
-      total: records.length,
-      enforce,
-      detect,
-      replacements,
-      distinctRules: byRule.size,
-      distinctDataTypes: byDataType.size,
-      dataTypeData,
-      topRules,
-      overTime,
-    };
+    return { total: records.length, enforce, detect, replacements, dataTypeData, topRules, overTime };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audit.data, labels]);
 
+  const recent = useMemo(() => {
+    const records = [...(audit.data ?? [])];
+    records.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''));
+    return records.slice(0, RECENT_COUNT);
+  }, [audit.data]);
+
   const auditDisabled = audit.error instanceof ApiRequestError && audit.error.status === 404;
-
-  if (auditDisabled) {
-    return (
-      <div>
-        <PageHeader title={t.overview.title} description={t.overview.description} />
-        <LifetimeMetrics dtLabel={dtLabel} />
-        <Alert appearance="info" icon title={t.overview.disabledTitle} description={t.overview.disabledHint} />
-      </div>
-    );
-  }
-
-  const enforcePct = agg.total ? Math.round((agg.enforce / agg.total) * 100) : 0;
 
   return (
     <div>
@@ -214,113 +353,134 @@ export function OverviewPage() {
           <ButtonOutline
             label={t.overview.refresh}
             icon={<UpdateSVG />}
-            loading={audit.isFetching}
-            onClick={() => audit.refetch()}
+            loading={audit.isFetching || metrics.isFetching}
+            onClick={() => {
+              audit.refetch();
+              metrics.refetch();
+            }}
           />
         }
       />
 
-      <LifetimeMetrics dtLabel={dtLabel} />
+      <Hero metrics={metrics} agg={agg} auditAvailable={Boolean(audit.data)} />
 
-      <QueryBoundary isLoading={audit.isLoading} error={audit.error} onRetry={() => audit.refetch()}>
-        {agg.total === 0 ? (
-          <Alert appearance="info" icon description={t.overview.empty} />
-        ) : (
-          <>
-            <div className={styles.statGrid}>
-              <StatTile
-                label={t.overview.stat.total}
-                value={agg.total}
-                hint={t.overview.windowHint(WINDOW)}
-                accent
-              />
-              <StatTile label={t.overview.stat.dataTypes} value={agg.distinctDataTypes} />
-              <StatTile label={t.overview.stat.rules} value={agg.distinctRules} />
-              <StatTile label={t.overview.stat.replacements} value={agg.replacements} />
-            </div>
+      {auditDisabled ? (
+        <Alert appearance="info" icon title={t.overview.disabledTitle} description={t.overview.disabledHint} />
+      ) : (
+        <QueryBoundary isLoading={audit.isLoading} error={audit.error} onRetry={() => audit.refetch()}>
+          {agg.total === 0 ? (
+            <Alert appearance="info" icon description={t.overview.empty} />
+          ) : (
+            <div className={styles.auditSections}>
+              <div className={styles.sectionEyebrow}>{t.overview.section.auditWindow(WINDOW)}</div>
 
-            <div className={styles.chartGrid}>
-              <Card title={t.overview.chart.byDataType} subtitle={t.overview.chart.byDataTypeSub}>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={agg.dataTypeData} margin={{ top: 8, right: 8, bottom: 8, left: -8 }}>
+              <div className={styles.chartRow}>
+                <Card title={t.overview.section.dataTypes}>
+                  {agg.dataTypeData.length === 0 ? (
+                    <span className={styles.muted}>{t.overview.section.noData}</span>
+                  ) : (
+                    <ResponsiveContainer
+                      width="100%"
+                      height={Math.max(agg.dataTypeData.length * 40 + 36, 120)}
+                    >
+                      <BarChart
+                        layout="vertical"
+                        data={agg.dataTypeData}
+                        margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          allowDecimals={false}
+                          tick={AXIS}
+                          tickLine={false}
+                          axisLine={{ stroke: 'var(--chart-grid)' }}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={140}
+                          tick={AXIS}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={ellipsize}
+                        />
+                        <Tooltip
+                          content={<ChartTooltip />}
+                          cursor={{ fill: 'var(--sys-neutral-background-opacity)' }}
+                        />
+                        {/* No entrance animation: instrument panels report state, they don't perform. */}
+                        <Bar
+                          dataKey="value"
+                          name={t.overview.chart.events}
+                          barSize={12}
+                          radius={[0, 4, 4, 0]}
+                          isAnimationActive={false}
+                        >
+                          {agg.dataTypeData.map((d) => (
+                            <Cell key={d.id} fill={CHART_COLOR[d.id] ?? 'var(--chart-dt-6)'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </Card>
+
+                <Card title={t.overview.chart.topRules}>
+                  <RuleBarList rules={agg.topRules} />
+                </Card>
+              </div>
+
+              <Card title={t.overview.section.dynamics}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={agg.overTime} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
+                    <defs>
+                      <linearGradient id="ov-area" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--chart-primary)" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="var(--chart-primary)" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
-                    <XAxis dataKey="name" tick={AXIS} tickLine={false} axisLine={{ stroke: 'var(--chart-grid)' }} interval={0} angle={-15} textAnchor="end" height={60} />
+                    <XAxis
+                      dataKey="time"
+                      tick={AXIS}
+                      tickLine={false}
+                      axisLine={{ stroke: 'var(--chart-grid)' }}
+                      minTickGap={24}
+                    />
                     <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--sys-neutral-background-opacity)' }} />
-                    <Bar dataKey="value" name={t.overview.chart.events} radius={[6, 6, 0, 0]}>
-                      {agg.dataTypeData.map((d) => (
-                        <Cell key={d.id} fill={CHART_COLOR[d.id] ?? 'var(--chart-dt-6)'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              <Card title={t.overview.chart.topRules} subtitle={t.overview.chart.topRulesSub}>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart
-                    layout="vertical"
-                    data={agg.topRules}
-                    margin={{ top: 4, right: 12, bottom: 4, left: 8 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={AXIS} tickLine={false} axisLine={{ stroke: 'var(--chart-grid)' }} />
-                    <YAxis type="category" dataKey="name" tick={AXIS} tickLine={false} axisLine={false} width={150} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--sys-neutral-background-opacity)' }} />
-                    <Bar dataKey="value" name={t.overview.chart.events} fill="var(--chart-primary)" radius={[0, 6, 6, 0]} />
-                  </BarChart>
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      name={t.overview.chart.events}
+                      stroke="var(--chart-primary)"
+                      strokeWidth={2}
+                      fill="url(#ov-area)"
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
               </Card>
 
               <Card
-                title={t.overview.chart.overTime}
-                subtitle={t.overview.chart.overTimeSub}
-                className={styles.full}
+                title={t.overview.section.recent}
+                action={
+                  <Link to="/audit" className={styles.allLink}>
+                    {t.overview.section.fullAudit}
+                  </Link>
+                }
               >
-                <div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <AreaChart data={agg.overTime} margin={{ top: 8, right: 8, bottom: 8, left: -8 }}>
-                      <defs>
-                        <linearGradient id="ov-area" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--chart-primary)" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="var(--chart-primary)" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
-                      <XAxis dataKey="time" tick={AXIS} tickLine={false} axisLine={{ stroke: 'var(--chart-grid)' }} minTickGap={24} />
-                      <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="count"
-                        name={t.overview.chart.events}
-                        stroke="var(--chart-primary)"
-                        strokeWidth={2}
-                        fill="url(#ov-area)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              <Card title={t.overview.chart.modeSplit} className={styles.full}>
-                <div className={styles.modeBar}>
-                  <div className={styles.modeEnforce} style={{ width: `${enforcePct}%` }} />
-                  <div className={styles.modeDetect} style={{ width: `${100 - enforcePct}%` }} />
-                </div>
-                <div className={styles.modeLegend}>
-                  <span>
-                    {t.overview.stat.enforce}: {agg.enforce}
-                  </span>
-                  <span>
-                    {t.overview.stat.detect}: {agg.detect}
-                  </span>
-                </div>
+                <ul className={styles.recentList}>
+                  {recent.map((r, i) => (
+                    <RecentRow key={r.request_id ?? i} record={r} />
+                  ))}
+                </ul>
               </Card>
             </div>
-          </>
-        )}
-      </QueryBoundary>
+          )}
+        </QueryBoundary>
+      )}
     </div>
   );
 }

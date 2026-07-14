@@ -1,0 +1,272 @@
+// Monitoring: a status band, a 2-col grid of instrument cards (traffic hero,
+// latency table, top bar-lists in the Overview's visual language), then the
+// Prometheus/Grafana hookup cards side by side.
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1120px;
+}
+
+.card {
+  width: 100%;
+}
+
+// Section separators: the one ALL-CAPS mono-eyebrow role.
+.eyebrow {
+  margin-top: 8px;
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sys-neutral-text-support);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+
+  @media (max-width: 1000px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--sys-neutral-text-support);
+}
+
+.mutedSmall {
+  color: var(--sys-neutral-text-support);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mono {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+// ── Status band ──────────────────────────────────────────────────────────────
+
+.statusBand {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.healthCluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.healthDot {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.healthDotOk {
+  background: var(--sys-green-accent-default, #21a038);
+  box-shadow: 0 0 0 4px var(--sys-green-background);
+}
+
+.healthDotBad {
+  background: var(--sys-red-accent-default, #e02d3c);
+  box-shadow: 0 0 0 4px var(--sys-red-background);
+}
+
+.healthText {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.statusReadouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+// ── Traffic card ─────────────────────────────────────────────────────────────
+
+.trafficBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// The page's one big number: lifetime masked requests, in the mono instrument voice.
+.heroValue {
+  font-family: var(--mono-headline-m-font-family, ui-monospace, monospace);
+  font-size: 40px;
+  line-height: 46px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-primary-accent-default);
+}
+
+.readouts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+// ── Latency table ────────────────────────────────────────────────────────────
+
+.latencyTable {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    padding: 6px 0;
+    color: var(--sys-neutral-text-support);
+    font-size: 13px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--sys-neutral-decor-default);
+  }
+
+  td {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--sys-neutral-decor-default);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.num {
+  text-align: right !important;
+  padding-left: 12px !important;
+}
+
+// ── Bar lists (the Overview's visual language) ───────────────────────────────
+
+.barList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 40%) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.barLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--sys-neutral-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.barDot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--sys-neutral-background-opacity);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.barCount {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sys-neutral-text-main);
+  min-width: 2ch;
+  text-align: right;
+}
+
+// ── Hookup cards ─────────────────────────────────────────────────────────────
+
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.codeBlock {
+  position: relative;
+  margin-top: 8px;
+}
+
+.code {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background-opacity);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  color: var(--sys-neutral-text-main);
+}
+
+.copyButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.inlineCode {
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  background: var(--sys-neutral-background-opacity);
+}
+
+.pathList {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepList {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--sys-neutral-text-main);
+  font-size: 15px;
+  line-height: 22px;
+}

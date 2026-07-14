@@ -15,63 +15,114 @@
   border-bottom: 1px solid var(--sys-neutral-decor-default);
 }
 
+// Section rhythm: hairline-separated blocks, 8px label→content inside.
 .body {
   flex: 1;
   overflow: auto;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .section {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  & + & {
+    border-top: 1px solid var(--sys-neutral-decor-default);
+    padding-top: 16px;
+  }
 }
 
+// Sentence case — ALL-CAPS is reserved for the mono-eyebrow role (Card).
 .sectionTitle {
   color: var(--sys-neutral-text-support);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .kv {
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 6px 16px;
+  align-items: baseline;
 }
 
 .kvKey {
   color: var(--sys-neutral-text-support);
+  font-size: 13px;
 }
 
 .mono {
-  font-family: var(--mono-body-m-font-family, ui-monospace, monospace);
-  font-size: 14px;
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
   word-break: break-all;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+// Rule ids in the instrument voice: quiet mono chips, not status badges.
+.ruleChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-neutral-decor-default);
+  color: var(--sys-neutral-text-main);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-all;
+}
+
+// Detect = protection reduced: amber outlined pill, same as table and topbar.
+.detectPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--sys-yellow-accent-default);
+  color: var(--sys-yellow-text-main);
+  font-family: var(--mono-body-s-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.tableWrap {
+  overflow-x: auto;
 }
 
 .replTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 
   th,
   td {
     text-align: left;
     padding: 8px 10px;
     border-bottom: 1px solid var(--sys-neutral-decor-default);
+    vertical-align: middle;
   }
 
   th {
     color: var(--sys-neutral-text-support);
     font-weight: 500;
+    font-size: 13px;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
   }
 }
