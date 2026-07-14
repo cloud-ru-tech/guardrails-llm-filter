@@ -15,8 +15,16 @@ services:
       GUARDRAILS_HEADERS_EXPOSE_TRIGGERED_RULES: "true"
       # Per-request masking audit trail (GET :9080/v1/audit/records):
       GUARDRAILS_AUDIT_ENABLED: "true"
-      # Uncomment to also store the masked request texts in audit records:
-      #   GUARDRAILS_AUDIT_STORE_MASKED_TEXTS: "true"
+      # Also persist the masked request/response texts so the web console
+      # (Audit -> record detail) can show what the model actually received/returned:
+      GUARDRAILS_AUDIT_STORE_MASKED_TEXTS: "true"
+      GUARDRAILS_AUDIT_STORE_MASKED_RESPONSE_TEXTS: "true"
+      # DEMO ONLY: keep the raw pre-masking value behind each placeholder so the
+      # console can "reveal original on hover". This stores real sensitive values
+      # in the audit store -- do NOT use `plain` in production (use `off`, or
+      # `encrypted` with GUARDRAILS_STORE_ENCRYPTION_ENABLED). Safe here because
+      # the demo only ever sees fake data and a local mock LLM.
+      GUARDRAILS_AUDIT_STORE_ORIGINAL_TEXTS: "plain"
       # The configuration API (:9080) is unauthenticated. This demo exposes it
       # on a trusted local network; in production protect it at the network
       # layer (cluster-internal only, never public ingress).
