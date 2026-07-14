@@ -328,7 +328,19 @@ export function RuleFormDrawer({ open, onClose, rule, dataTypeOptions }: Props) 
               />
             </div>
             {testError && <Alert appearance="error" icon description={testError} />}
-            {scan.data && !testError && <ScanResultPanel result={scan.data} dtLabel={dtLabel} />}
+            {scan.data && !testError && (
+              <ScanResultPanel
+                result={scan.data}
+                dtLabel={dtLabel}
+                // The candidate rule's CURRENT form data type must win over
+                // the saved registry entry (edited or brand-new rule).
+                ruleDataTypeOverrides={
+                  form.ruleId && typeof form.dataType === 'number'
+                    ? { [form.ruleId]: form.dataType }
+                    : undefined
+                }
+              />
+            )}
           </section>
         </div>
 

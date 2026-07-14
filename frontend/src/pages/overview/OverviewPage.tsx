@@ -17,7 +17,7 @@ import {
   type TooltipProps,
 } from 'recharts';
 
-import { ApiRequestError } from '@/api/client';
+import { isAuditDisabledError } from '@/api/client';
 import { useDataTypes, useMetricsSummary, useRecentAudit } from '@/api/hooks';
 import type { AuditRecord, Latency } from '@/api/types';
 import { Card } from '@/components/Card';
@@ -56,9 +56,13 @@ function fmtTime(ts?: string): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** Adaptive latency format: sub-millisecond quantiles read «<1 мс». */
-function fmtLatency(seconds?: number): string | null {
-  if (seconds == null) return null;
+/**
+ * Adaptive latency format: sub-millisecond quantiles read «<1 мс». A bucket
+ * with zero samples yields null — the histogram always exists, so without the
+ * count guard a fresh instance would fabricate a measured «<1 мс».
+ */
+function fmtLatency(seconds?: number, count?: number): string | null {
+  if (!count || seconds == null) return null;
   const ms = seconds * 1000;
   return ms < 1 ? t.overview.hero.subMs : t.overview.hero.ms(Math.round(ms));
 }
@@ -118,7 +122,6 @@ function Hero({
   let passthrough: number | null = null;
   let passthroughHint: string | undefined;
   let replacements: number | null = null;
-  let replacementsHint: string | undefined;
 
   if (base === 'metrics' && m) {
     const byMode = m.requests_masked_total ?? {};
@@ -126,15 +129,17 @@ function Hero({
     enforce = byMode.enforce ?? 0;
     detect = byMode.detect ?? 0;
     passthrough = Object.values(m.passthrough_total ?? {}).reduce((a, b) => a + b, 0);
-    replacements = (m.rule_triggers_total ?? []).reduce((a, r) => a + (r.count ?? 0), 0);
+    // No replacements counter exists in the metrics summary (rule_triggers_total
+    // counts per-request triggers and is capped to the top 20) — the readout is
+    // shown only when the hero is computed from the audit window.
 
     // The highest-volume latency bucket is the representative sample.
     const bucket = Object.entries(m.latency_seconds ?? {}).reduce<[string, Latency] | null>(
       (best, cur) => (best == null || (cur[1].count ?? 0) > (best[1].count ?? 0) ? cur : best),
       null,
     );
-    p50 = fmtLatency(bucket?.[1].p50);
-    p95 = fmtLatency(bucket?.[1].p95);
+    p50 = fmtLatency(bucket?.[1].p50, bucket?.[1].count);
+    p95 = fmtLatency(bucket?.[1].p95, bucket?.[1].count);
     latencyHint =
       bucket && (p50 != null || p95 != null)
         ? t.overview.hero.latencyBucket(bucket[0])
@@ -146,11 +151,9 @@ function Hero({
     replacements = agg.replacements;
     latencyHint = t.overview.hero.noMetrics;
     passthroughHint = t.overview.hero.noMetrics;
-    replacementsHint = undefined;
   } else {
     latencyHint = t.overview.hero.noMetrics;
     passthroughHint = t.overview.hero.noMetrics;
-    replacementsHint = t.overview.hero.noMetrics;
   }
 
   const splitTotal = (enforce ?? 0) + (detect ?? 0);
@@ -207,11 +210,9 @@ function Hero({
             hint={passthroughHint}
             tone={passthrough != null && passthrough > 0 ? 'danger' : 'default'}
           />
-          <Readout
-            label={t.overview.hero.replacements}
-            value={replacements == null ? t.common.none : fmt(replacements)}
-            hint={replacementsHint}
-          />
+          {base === 'audit' && replacements != null && (
+            <Readout label={t.overview.hero.replacements} value={fmt(replacements)} />
+          )}
         </div>
       </div>
     </Card>
@@ -342,7 +343,7 @@ export function OverviewPage() {
     return records.slice(0, RECENT_COUNT);
   }, [audit.data]);
 
-  const auditDisabled = audit.error instanceof ApiRequestError && audit.error.status === 404;
+  const auditDisabled = isAuditDisabledError(audit.error);
 
   return (
     <div>

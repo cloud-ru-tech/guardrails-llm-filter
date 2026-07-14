@@ -101,7 +101,7 @@ flowchart LR
 
 ## Деплой
 
-- **Docker**: корневой `Dockerfile` — multi-stage. Стадия `node:22-alpine` собирает
+- **Docker**: корневой `Dockerfile` — multi-stage. Стадия `node:24-alpine` собирает
   веб-консоль (`frontend/dist`), которая вшивается в Go-бинарь; runtime — distroless,
   non-root. `make docker-build` собирает всё из корня репо.
 - **Kubernetes**: kustomize-база `deploy/kubernetes/` — deployment (HTTP-пробы `/healthz`

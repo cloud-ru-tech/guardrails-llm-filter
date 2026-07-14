@@ -4,7 +4,7 @@ import { ChipToggle } from '@snack-uikit/chips';
 import { FieldSelect, FieldText } from '@snack-uikit/fields';
 import { useMemo, useState } from 'react';
 
-import { ApiRequestError } from '@/api/client';
+import { isAuditDisabledError } from '@/api/client';
 import { useAuditRecords, useDataTypes } from '@/api/hooks';
 import type { AuditQuery, AuditRecord } from '@/api/types';
 import { DataGrid, type Column } from '@/components/DataGrid';
@@ -82,27 +82,37 @@ function fromLocalInput(v: string): string {
   return Number.isNaN(d.getTime()) ? v : d.toISOString();
 }
 
-// "2026-07-14T09:15:23.123456Z" → "09:15:23.123"; the clock stays in UTC so it
-// never disagrees with the UTC day the row is grouped under.
-const CLOCK_RE = /T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?/;
-
+// The whole page speaks the operator's local clock: the datetime-local filter
+// inputs, the clock column and the day-group headers — so a value the user
+// just filtered on can never appear to violate the filter. The full RFC3339
+// UTC timestamp stays available in the cell tooltip.
 function formatClock(ts?: string): string {
   if (!ts) return t.common.none;
-  const m = CLOCK_RE.exec(ts);
-  if (!m) return ts;
-  return `${m[1]}.${(m[2] ?? '').padEnd(3, '0').slice(0, 3)}`;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  const p = (n: number) => String(n).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${ms}`;
+}
+
+/** RFC3339 → local-day group key "YYYY-MM-DD". */
+function localDayKey(ts?: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts.slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 const DAY_FORMAT = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
-  timeZone: 'UTC',
 });
 
-/** "2026-07-14" → «14 июля 2026» (the trailing „г.“ is dropped). */
+/** Local "2026-07-14" → «14 июля 2026» (the trailing „г.“ is dropped). */
 function formatDay(key: string): string {
-  const d = new Date(`${key}T00:00:00Z`);
+  const d = new Date(`${key}T00:00:00`);
   if (Number.isNaN(d.getTime())) return key || t.common.none;
   return DAY_FORMAT.format(d).replace(/\s*г\.$/, '');
 }
@@ -110,11 +120,14 @@ function formatDay(key: string): string {
 export function AuditPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [activePreset, setActivePreset] = useState<PresetKey | null>('all');
-  const [applied, setApplied] = useState<AuditQuery>(toQuery(EMPTY));
-  const [appliedMode, setAppliedMode] = useState<ModeFilter>('');
+  // The last APPLIED filter set — the form (`filters`) diverges from it until
+  // the user presses «Применить»; range presets only ever touch since/until.
+  const [appliedFilters, setAppliedFilters] = useState<Filters>(EMPTY);
   const [selected, setSelected] = useState<AuditRecord | null>(null);
 
   const dataTypesQuery = useDataTypes();
+  const applied = useMemo(() => toQuery(appliedFilters), [appliedFilters]);
+  const appliedMode = appliedFilters.mode;
   const audit = useAuditRecords(applied);
 
   const dataTypeLabels = useMemo(() => {
@@ -165,30 +178,28 @@ export function AuditPage() {
     setActivePreset(null);
   };
 
+  // A preset applies ONLY the time range: the form fields update, but other
+  // half-typed filters stay un-applied until the explicit «Применить».
   const applyPreset = (key: PresetKey) => {
     const preset = RANGE_PRESETS.find((p) => p.key === key);
     if (!preset) return;
     const since = preset.ms == null ? '' : new Date(Date.now() - preset.ms).toISOString();
-    const next: Filters = { ...filters, since, until: '' };
-    setFilters(next);
+    setFilters((prev) => ({ ...prev, since, until: '' }));
     setActivePreset(key);
-    setApplied(toQuery(next));
-    setAppliedMode(next.mode);
+    setAppliedFilters((prev) => ({ ...prev, since, until: '' }));
   };
 
   const apply = () => {
-    setApplied(toQuery(filters));
-    setAppliedMode(filters.mode);
+    setAppliedFilters(filters);
   };
 
   const reset = () => {
     setFilters(EMPTY);
     setActivePreset('all');
-    setApplied(toQuery(EMPTY));
-    setAppliedMode('');
+    setAppliedFilters(EMPTY);
   };
 
-  const auditDisabled = audit.error instanceof ApiRequestError && audit.error.status === 404;
+  const auditDisabled = isAuditDisabledError(audit.error);
 
   const rfc3339Title = (value: string) =>
     value ? `${value} — ${t.audit.rfc3339Title}` : t.audit.rfc3339Title;
@@ -245,7 +256,8 @@ export function AuditPage() {
       render: (r) => (r.replacements ?? []).length,
     },
     {
-      // Detect is the exception worth marking; enforce is the default and stays quiet.
+      // Detect is the exception worth marking; enforce is the default and
+      // stays quiet; an absent/unknown mode must NOT read as enforce.
       key: 'mode',
       header: t.audit.col.mode,
       width: '88px',
@@ -254,7 +266,9 @@ export function AuditPage() {
           <span className={styles.detectPill} title={t.audit.detectHint}>
             detect
           </span>
-        ) : null,
+        ) : r.mode === 'enforce' ? null : (
+          <span className={styles.noneCell}>{t.common.none}</span>
+        ),
     },
   ];
 
@@ -357,8 +371,14 @@ export function AuditPage() {
               rows={records}
               rowKey={(r) => r.request_id ?? String(r.timestamp)}
               onRowClick={(r) => setSelected(r)}
-              emptyLabel={t.audit.empty}
-              groupBy={(r) => (r.timestamp ?? '').slice(0, 10)}
+              emptyLabel={
+                // The mode filter is client-side over fetched pages: an empty
+                // result does NOT mean matching records don't exist further on.
+                appliedMode && (allRecords.length > 0 || audit.hasNextPage)
+                  ? t.audit.modeClientHint
+                  : t.audit.empty
+              }
+              groupBy={(r) => localDayKey(r.timestamp)}
               renderGroupHeader={formatDay}
             />
             {audit.hasNextPage && (

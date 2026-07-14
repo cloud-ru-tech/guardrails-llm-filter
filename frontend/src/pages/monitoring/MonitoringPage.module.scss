@@ -84,6 +84,12 @@
   box-shadow: 0 0 0 4px var(--sys-red-background);
 }
 
+// First probe still in flight — neither green nor red yet.
+.healthDotPending {
+  background: var(--sys-neutral-text-support);
+  box-shadow: 0 0 0 4px var(--sys-neutral-background-opacity);
+}
+
 .healthText {
   display: flex;
   flex-direction: column;

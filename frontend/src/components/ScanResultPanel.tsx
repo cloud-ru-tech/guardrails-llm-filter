@@ -16,13 +16,21 @@ function SectionTitle({ children }: { children: string }) {
 export function ScanResultPanel({
   result,
   dtLabel,
+  ruleDataTypeOverrides,
 }: {
   result: ScanResponse;
   dtLabel: (id: number) => string;
+  /**
+   * rule_id → data_type that wins over the saved-rules registry. The rule
+   * form's tester passes its CANDIDATE rule here: the form's (possibly
+   * edited, possibly unsaved) data type must paint the entity ticks — not
+   * the stale registry entry.
+   */
+  ruleDataTypeOverrides?: Record<string, number>;
 }) {
   // Resolves rule_id → data_type so mask-chips get their entity tick. The
-  // rules list is a cached query; unknown ids (e.g. a draft rule in the rule
-  // form tester) simply render without a tick.
+  // rules list is a cached query; unknown ids without an override simply
+  // render without a tick.
   const rulesQuery = useRules('all');
 
   const maskedTexts = result.masked_texts ?? [];
@@ -36,8 +44,11 @@ export function ScanResultPanel({
     for (const rule of rulesQuery.data ?? []) {
       map.set(rule.rule_id, rule.data_type);
     }
+    for (const [id, dt] of Object.entries(ruleDataTypeOverrides ?? {})) {
+      map.set(id, dt);
+    }
     return map;
-  }, [rulesQuery.data]);
+  }, [rulesQuery.data, ruleDataTypeOverrides]);
 
   // placeholder → original / data type maps for MaskedText chips.
   const { originals, placeholderDataTypes } = useMemo(() => {
