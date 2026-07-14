@@ -228,8 +228,8 @@ export const t = {
         text: 'Добрый день! Продублируйте, пожалуйста, чек об оплате на почту ivan.petrov84@example.com. Платёж прошёл с карты 4276 5500 1234 5677, если нужен возврат — реквизиты те же.',
       },
       {
-        label: 'DSN + токен',
-        text: 'Воркер биллинга падает после деплоя. DSN прода: postgres://billing_app:Sup3rSecret_2024@db-prod-01.internal:5432/billing — подключение проходит, но миграции не стартуют. Ключ Stripe для проверки вебхука: acme-deadbeef42, действует до конца месяца.',
+        label: 'DSN + пароль',
+        text: 'Воркер биллинга падает после деплоя. DSN прода: postgres://billing_app:Sup3rSecret_2024@db-prod-01.internal:5432/billing — подключение проходит, но миграции не стартуют. Логи дублируются в https://svc_logger:Tr0ub4dor_77@logs.internal/ingest, доступ по тому же паролю.',
       },
       {
         label: 'СНИЛС + телефон',
