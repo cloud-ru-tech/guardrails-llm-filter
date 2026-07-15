@@ -267,8 +267,22 @@ guardrails_regex_rules:
     group_priority: 50
     name: PERSONAL_DATA
     display_name: "Персональные данные"
-    description: "Телефонные номера (РФ), email, СНИЛС, ИНН, ОГРН, ОГРНИП, банковские карты (Visa, MasterCard, Мир), IBAN"
+    description: "ФИО, телефонные номера (РФ), email, СНИЛС, ИНН, ОГРН, ОГРНИП, банковские карты (Visa, MasterCard, Мир), IBAN"
     rules:
+      - rule_id: pii.fio-ru
+        name: pii.fio-ru
+        # Russian full names (ФИО). Three capitalized Cyrillic words alone are
+        # far too noisy, so the patronymic suffix (-вич/-вна/-ична) is the
+        # precision anchor and both word orders require it:
+        #   "Смирнова Анна Сергеевна" (Ф И О) and "Иван Петрович Сидоров" (И О Ф);
+        # hyphenated surnames (Петрова-Водкина) are covered. RE2 \b is
+        # ASCII-only and never fires next to Cyrillic, hence the explicit
+        # non-letter guards; only capture group 1 (the name) is masked.
+        regex: '(?:^|[^ЁА-Яёа-я])((?:[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?\s+[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:вич|вна|ична))|(?:[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:вич|вна|ична)\s+[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?))(?:[^ЁА-Яёа-я]|$)'
+        masking:
+          capture_groups: [1]
+          placeholder: "FIO"
+
       - rule_id: pii.phone-ru
         name: pii.phone-ru
         # Leading guard (start-of-line or a non-digit) prevents matching a phone

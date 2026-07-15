@@ -1616,6 +1616,12 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "+7-(111)-111-11-11",
 		},
 		{
+			name:         "pii.fio-ru",
+			ruleID:       "pii.fio-ru",
+			input:        "Заявка на пропуск: Смирнова Анна Сергеевна, дата визита — 15 июля.",
+			wantFullText: "Смирнова Анна Сергеевна",
+		},
+		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",
 			input:        "curl -H \"Authorization: Basic dGVzdGluZw==\" https://example.test ",
@@ -1789,6 +1795,36 @@ func TestPassportFormats(t *testing.T) {
 	bare := series + number // 4509123456
 	assertNoMatch(t, scanner, "pii.docs.passport", bare)
 	assertNoMatch(t, scanner, "pii.docs.passport", "номер заказа "+bare+" готов")
+}
+
+// TestFioRuFormats locks in Russian full-name detection: the patronymic suffix
+// (-вич/-вна/-ична) is the precision anchor, both word orders are covered
+// (Фамилия Имя Отчество and Имя Отчество Фамилия, incl. hyphenated surnames),
+// and capitalized sequences WITHOUT a patronymic never match.
+func TestFioRuFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"surname-first", "пропуск для Смирнова Анна Сергеевна, стол 5", "Смирнова Анна Сергеевна"},
+		{"surname-last", "командирован Иван Петрович Сидоров сегодня", "Иван Петрович Сидоров"},
+		{"male-patronymic", "исполнитель: Кузнецов Пётр Иванович.", "Кузнецов Пётр Иванович"},
+		{"ichna-patronymic", "заявитель Фомина Мария Ильинична принята", "Фомина Мария Ильинична"},
+		{"hyphenated-surname", "докладчик Петрова-Водкина Анна Сергеевна выступит", "Петрова-Водкина Анна Сергеевна"},
+		{"start-of-text", "Смирнова Анна Сергеевна оформила пропуск", "Смирнова Анна Сергеевна"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru", tt.input, tt.match)
+		})
+	}
+
+	// No patronymic anchor -> no match: bare name pairs and arbitrary
+	// capitalized triples must pass through.
+	assertNoMatch(t, scanner, "pii.fio-ru", "встреча с Анна Смирнова в офисе")
+	assertNoMatch(t, scanner, "pii.fio-ru", "Общество Ромашка Москва открыло филиал")
+	assertNoMatch(t, scanner, "pii.fio-ru", "Заявка На Пропуск оформлена")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are

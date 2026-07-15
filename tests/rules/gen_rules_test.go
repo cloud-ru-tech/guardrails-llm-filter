@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 257
-	expectedRealConfigCases = 268
+	expectedGenConfigRules  = 258
+	expectedRealConfigCases = 269
 )
 
 type genConfigRuleCase struct {
@@ -429,5 +429,10 @@ func chooseRuneFromClass(ranges []rune) rune {
 			return r
 		}
 	}
-	panic(fmt.Sprintf("no ASCII rune found for char class %v", ranges))
+	// Non-ASCII class (e.g. Cyrillic [А-Яа-яЁё] in the ФИО rule): take the
+	// first rune of the first range.
+	if len(ranges) > 0 {
+		return ranges[0]
+	}
+	panic(fmt.Sprintf("no rune found for char class %v", ranges))
 }
