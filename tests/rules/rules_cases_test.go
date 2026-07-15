@@ -1661,6 +1661,12 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "ABCxyz123456789qwertyuiop",
 		},
 		{
+			name:         "access_tokens.generic-long-token",
+			ruleID:       "access_tokens.generic-long-token",
+			input:        "старый ZXCasd123QWEzxc456RTYfgh789UIOjkl012 истёк",
+			wantFullText: "ZXCasd123QWEzxc456RTYfgh789UIOjkl012",
+		},
+		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",
 			input:        "curl -H \"Authorization: Basic dGVzdGluZw==\" https://example.test ",
@@ -1945,6 +1951,32 @@ func TestFioShortFormats(t *testing.T) {
 // close the pii-bench 152-ФЗ coverage gaps: КПП, CVC and the generic token
 // catch-all — each requires its context keyword, and bare numbers/strings
 // without that anchor pass through.
+// TestAddressFormats locks in the three address shapes and the precision
+// guards: a street/apartment anchor is always required, a bare word is not.
+func TestAddressFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"marker-first-city", "жду заказ на г. Москва, ул. Тверская 15 завтра", "г. Москва, ул. Тверская 15"},
+		{"marker-first-apt", "адрес: ул. Гагарина 23 кв 45 приезжайте", "ул. Гагарина 23 кв 45"},
+		{"marker-after-name", "жду на Невский проспект 88 сегодня", "Невский проспект 88"},
+		{"marker-after-comma", "заказ на Ленинградский проспект, дом 45, квартира 12", "Ленинградский проспект, дом 45, квартира 12"},
+		{"apartment-anchor", "жду доставку Чехова 44 кв 78 вечером", "Чехова 44 кв 78"},
+		{"korpus-anchor", "адрес Московская 156 подъезд 2 тут", "Московская 156 подъезд 2"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.docs.address", tt.input, tt.match)
+		})
+	}
+	// A street marker glued inside a word (артик-УЛ) must not fire; a bare
+	// capitalized pair with no marker/suffix passes through.
+	assertNoMatch(t, scanner, "pii.docs.address", "артикул товара 789012 закончился")
+	assertNoMatch(t, scanner, "pii.docs.address", "поезд Москва Ростов прибыл")
+}
+
 func TestKppCvcTokenFormats(t *testing.T) {
 	t.Parallel()
 	scanner, _ := loadRealConfigScanner(t)
@@ -1957,7 +1989,9 @@ func TestKppCvcTokenFormats(t *testing.T) {
 	// CVC: cvc/cvv/цвс keyword; a generic 3-digit "код 789" is left alone.
 	assertSingleMatch(t, scanner, "pii.fin.cvc", "цвс был 408, но система", "408")
 	assertSingleMatch(t, scanner, "pii.fin.cvc", "нужен cvc 789 для оплаты", "789")
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "код на обороте карты 274 введите", "274")
 	assertNoMatch(t, scanner, "pii.fin.cvc", "система не принимает код 789")
+	assertNoMatch(t, scanner, "pii.fin.cvc", "три цифры пароля 123 неверны")
 
 	// Token: keyword + 16+ alnum, OTP after a recovery-code keyword, and a
 	// keyword-free 40+ char fallback.
@@ -1966,6 +2000,18 @@ func TestKppCvcTokenFormats(t *testing.T) {
 		"7f8d9a2b4e1c6f3a8b5d2e9c4a7f1b8e3d6c9a2f5b8e1d4a7c")
 	assertSingleMatch(t, scanner, "access_tokens.generic-token",
 		"код восстановления 847593 отправлен", "847593")
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"используйте API ключ api_3f8e9d2c1b4a5f6e7d8c9b0a1f2e3d4 для доступа",
+		"api_3f8e9d2c1b4a5f6e7d8c9b0a1f2e3d4")
+	// The long-token fallback catches mixed-case tokens but NOT lowercase hex
+	// hashes / UUIDs (they read as ordinary technical identifiers).
+	assertSingleMatch(t, scanner, "access_tokens.generic-long-token",
+		"старый pQ6rS8tU0vX3yZ5aB7cD9eF1gH3jK5mN7pR9sT истёк",
+		"pQ6rS8tU0vX3yZ5aB7cD9eF1gH3jK5mN7pR9sT")
+	assertNoMatch(t, scanner, "access_tokens.generic-long-token",
+		"commit a1b2c3d4e5f6789012345678901234567890abcd смержен")
+	assertNoMatch(t, scanner, "access_tokens.generic-long-token",
+		"UUID 550e8400e29b41d4a716446655440000 в базе")
 }
 
 // TestPassportContextInflections checks the widened passport rule: the keyword

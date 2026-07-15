@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 264
-	expectedRealConfigCases = 275
+	expectedGenConfigRules  = 265
+	expectedRealConfigCases = 276
 )
 
 type genConfigRuleCase struct {
@@ -129,6 +129,7 @@ func TestRealConfigCaptureGroupDecisionsAreExplicit(t *testing.T) {
 		"credentials.curl-auth-user.gl":         {},
 		"credentials.kubernetes-secret-yaml.gl": {},
 		"access_tokens.generic-token":           {},
+		"pii.fin.cvc":                         {},
 	}
 
 	for _, rl := range rulesByID {
@@ -184,6 +185,14 @@ func multiCaptureCases() []genConfigRuleCase {
 	atlassianStandalone := "ATATT3" + strings.Repeat("A", 186)
 
 	return []genConfigRuleCase{
+		{
+			// Keyword-free long-token: the auto-generated example is a single
+			// char that fails min_length:32, so supply a real 32+ example.
+			name:         "access_tokens.generic-long-token",
+			ruleID:       "access_tokens.generic-long-token",
+			input:        "старый ZXCasd123QWEzxc456RTYfgh789UIOjkl012 истёк",
+			wantFullText: "ZXCasd123QWEzxc456RTYfgh789UIOjkl012",
+		},
 		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",

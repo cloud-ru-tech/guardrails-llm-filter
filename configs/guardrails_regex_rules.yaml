@@ -187,13 +187,26 @@ guardrails_regex_rules:
         name: access_tokens.generic-token
         # Format-agnostic token catch-all the provider-specific rules miss.
         # Branch 1: a token/API-key/access-token keyword (up to five filler words
-        # away) followed by a 16+ char alphanumeric secret. Branch 2: recovery /
-        # confirmation / OTP codes (4-8 digits after their keyword). Branch 3: a
-        # keyword-free fallback for very long (40+) alphanumeric strings, which are
-        # almost never ordinary prose. Whichever group matches is masked.
-        regex: '(?i)(?:(?:api[\s-]?(?:ключ|key)|access[\s-]?token|reset[\s-]?токен|токен|token)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,5}[\s,.:;!?()«»"\x27-]*([A-Za-z0-9]{16,})|(?:код\s+(?:восстановлени[а-яё]+|подтвержд[а-яё]+|из\s+смс)|otp|one-time)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{4,8})|\b([A-Za-z0-9]{40,}))\b'
+        # away) followed by a 16+ char alphanumeric secret. Branch 2: an
+        # api_/key_/token_/sk_/pk_ prefixed secret (the prefix is the anchor).
+        # Branch 3: recovery / confirmation / OTP codes (4-8 digits after their
+        # keyword). Whichever group matches is masked.
+        regex: '(?i)(?:(?:api[\s-]?(?:ключ|key)|access[\s-]?token|reset[\s-]?токен|токен|token)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,5}[\s,.:;!?()«»"\x27-]*([A-Za-z0-9]{16,})|\b((?:api|key|token|tok|sk|pk|secret|access)_[A-Za-z0-9]{16,})|(?:смс\s+с\s+код[а-яё]*|код\s+(?:восстановлени[а-яё]+|подтвержден[а-яё]+|активаци[а-яё]+|из\s+смс|для\s+(?:подтвержден[а-яё]+|активаци[а-яё]+|верификац[а-яё]+))|otp|one-time|(?:пришел|пришёл|получил)\s+код)(?:[^\d]{0,15})(\d{4,8}))\b'
         masking:
           capture_groups: [1, 2, 3]
+          placeholder: "TOKEN"
+
+      - rule_id: access_tokens.generic-long-token
+        name: access_tokens.generic-long-token
+        # Keyword-free fallback for long (32+ char) mixed-case tokens where no
+        # nearby keyword survives. The case-sensitive uppercase requirement
+        # (?-i) is the precision anchor: it excludes all-lowercase hex hashes,
+        # git SHAs and UUIDs (which read as ordinary technical identifiers, not
+        # secrets) while still catching mixed-case tokens like ZXCasd123QWE….
+        regex: '(?-i)\b([A-Za-z0-9]*[A-Z][A-Za-z0-9]*)\b'
+        min_length: 32
+        masking:
+          capture_groups: [1]
           placeholder: "TOKEN"
 
       - rule_id: access_tokens.vault-token
@@ -391,11 +404,15 @@ guardrails_regex_rules:
 
       - rule_id: pii.docs.address
         name: pii.docs.address
-        # RU postal address: optional "г. City," + a street-type marker
-        # (ул./пр./пер./шоссе/…) + name + house number, optionally extended with
-        # корпус/строение and кв./подъезд/офис. The street marker is the precision
-        # anchor; bare "Name Number" pairs are deliberately NOT matched.
-        regex: '(?i)((?:г\.?\s?[ЁА-Я][ёа-я\-]+,?\s+)?(?:ул(?:ица)?|пр-т|пр\.|просп(?:ект)?|пер(?:еул(?:ок)?)?\.?|пл(?:ощадь)?|б-р|бул(?:ьвар)?|шоссе|наб(?:ережная)?)\.?\s+(?:[ЁА-Яа-яё0-9][ёа-яЁА-Я0-9.\-]*\s+){1,3}(?:д\.?\s?)?\d+[а-я]?(?:\s?(?:к(?:орп(?:ус)?)?|стр(?:оение)?)\.?\s?\d+)?(?:[,\s]+(?:кв(?:артира)?|подъезд|под|офис)\.?\s?\d+[а-я]?)?)'
+        # RU postal address across three shapes: (A) marker-first —
+        # "г. Москва, ул. Тверская 15"; (B) marker-after-name —
+        # "Невский проспект 88", "Ленинградский проспект, дом 45"; (C) bare
+        # name + house anchored by an apartment/entrance suffix —
+        # "Чехова 44 кв 78". A street/apartment anchor is always required; a bare
+        # "Name Number" pair with no marker or suffix is deliberately NOT matched.
+        # The leading boundary keeps a marker like "ул" from firing inside a word
+        # (артик-УЛ). Group 1 (the whole address) is masked.
+        regex: '(?i)(?:^|[\s.,:;!?(])((?:[Гг]\.?\s?(?-i:[ЁА-Я])[ёа-я\-]+,?\s+)?(?:ул(?:иц[аеу])?|пр-т|пр\.|просп(?:ект)?|пер(?:еул(?:ок)?)?\.?|пл(?:ощадь)?|б-р|бул(?:ьвар)?|шоссе|наб(?:ережная)?|проезд)\.?\s+(?:(?-i:[ЁА-Я])[ёа-яЁА-Я0-9.\-]*[,\s]+){1,3}(?:д(?:ом)?\.?\s?)?\d+[а-я]?(?:\s?(?:к(?:орп(?:ус)?)?|стр(?:оение)?)\.?\s?\d+)?(?:[,\s]+(?:кв(?:артира)?|подъезд|под|офис)\.?\s?\d+[а-я]?)?|(?:(?-i:[ЁА-Я])[ёа-яЁА-Я0-9.\-]*\s+){1,2}(?:проспект|улиц[аеу]|переулок|площадь|шоссе|бульвар|набережная|проезд)[,\s]+(?:д(?:ом)?\.?\s?)?\d+[а-я]?(?:[,\s]+(?:кв(?:артира)?|подъезд|под|офис|корпус|к)\.?\s?\d+[а-я]?)?|(?-i:[ЁА-Я])[ёа-яЁА-Я0-9.\-]*\s+\d+[а-я]?\s?(?:к(?:орп(?:ус)?)?\.?\s?\d+|(?:,?\s?(?:кв(?:артира)?|подъезд|под)\.?\s?\d+)))'
         masking:
           capture_groups: [1]
           placeholder: "ADDRESS"
@@ -455,10 +472,11 @@ guardrails_regex_rules:
       - rule_id: pii.fin.cvc
         name: pii.fin.cvc
         # Card CVC/CVV — 3 digits. A bare 3-digit run is hopelessly common, so a
-        # cvc/cvv/цвс keyword (or "код безопасности") within three words is the
-        # precision anchor. Generic "код NNN" without a CVC keyword is left alone.
-        regex: '(?i)(?:cvc|cvv|цвс|cvv2|cvc2|код\s+безопасности)(?:[\s,.:;!?()«»"\x27-]+[а-яёa-z]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{3})\b'
-        keywords: ["cvc", "cvv", "цвс"]
+        # keyword is the precision anchor: either an explicit cvc/cvv/цвс (branch
+        # 1) or a card-security phrase — «на обороте карты», «сзади карты»,
+        # «код подтверждения карты» (branch 2). A generic «код 789» is left alone.
+        regex: '(?i)(?:(?:cvc|cvv|цвс|cvv2|cvc2|код\s+безопасности)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{3})|(?:обороте?\s+карт[а-яё]*|сзади\s+карт[а-яё]*|на\s+обороте|код\s+подтвержден[а-яё]+\s+карт[а-яё]*|цифры\s+(?:на\s+)?обороте|карт[а-яё]*\s+для\s+бронировани[а-яё]*)(?:[^\d]{0,20})(\d{3}))\b'
+        keywords: ["cvc", "cvv", "цвс", "обороте", "сзади", "карт"]
         masking:
-          capture_groups: [1]
+          capture_groups: [1, 2]
           placeholder: "CVC"
