@@ -183,6 +183,19 @@ guardrails_regex_rules:
           capture_groups: [1]
           placeholder: "NPM_TOKEN"
 
+      - rule_id: access_tokens.generic-token
+        name: access_tokens.generic-token
+        # Format-agnostic token catch-all the provider-specific rules miss.
+        # Branch 1: a token/API-key/access-token keyword (up to five filler words
+        # away) followed by a 16+ char alphanumeric secret. Branch 2: recovery /
+        # confirmation / OTP codes (4-8 digits after their keyword). Branch 3: a
+        # keyword-free fallback for very long (40+) alphanumeric strings, which are
+        # almost never ordinary prose. Whichever group matches is masked.
+        regex: '(?i)(?:(?:api[\s-]?(?:ключ|key)|access[\s-]?token|reset[\s-]?токен|токен|token)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,5}[\s,.:;!?()«»"\x27-]*([A-Za-z0-9]{16,})|(?:код\s+(?:восстановлени[а-яё]+|подтвержд[а-яё]+|из\s+смс)|otp|one-time)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{4,8})|\b([A-Za-z0-9]{40,}))\b'
+        masking:
+          capture_groups: [1, 2, 3]
+          placeholder: "TOKEN"
+
       - rule_id: access_tokens.vault-token
         name: access_tokens.vault-token
         regex: '(hv[sbr]\.[A-Za-z0-9_\-]{90,120})(?:[\x60''"\s,;:!?()\[\]{}]|\\[nr]|$)'
@@ -354,19 +367,38 @@ guardrails_regex_rules:
       - rule_id: pii.docs.passport
         name: pii.docs.passport
         # RF internal passport (4-digit series + 6-digit number) has no checksum,
-        # so context keywords (паспорт/серия/...) are required *inside* the regex.
-        # The `keywords` field below stays informational: the "пасп\.?" branch
-        # matches without any full keyword, so the keyword pre-filter treats this
-        # rule as NOT eligible and always scans it (the in-regex context is what
-        # guarantees precision). Only the digit span is masked via capture group 1.
-        # Handles
-        # "4509 123456", "45 09 123456",
-        # "4509123456", "серия 4509 номер 123456", "45 09 № 123456".
-        regex: '(?i)(?:паспорт(?:\s+рф)?|пасп\.?|серия)[\s№:.-]*(\d{2}[\s-]?\d{2}[\s-]*(?:(?:№|номер)[\s№:.-]*)?\d{6})\b'
-        keywords: ["паспорт", "серия", "номер"]
+        # so a context keyword is required *inside* the regex. The keyword accepts
+        # inflections (паспорт/паспорта/паспортные/паспортом/…) and up to three
+        # filler words may sit between it and the number, so
+        # "с моим паспортом? 4609 328145" and "паспортные данные: 4518123456" both
+        # match. Only the digit span is masked via capture group 1. Handles
+        # "4609 328145", "77 12 345678", "5012345678", "серия 4509 № 123456".
+        regex: '(?i)(?:паспорт[а-яё]*|пасп\.?|серия)(?:[\s,.:;!?()«»"\x27-]+[а-яё]+){0,3}[\s,.:;!?()«»"\x27№-]*(\d{2}[\s-]?\d{2}[\s-]*(?:(?:№|номер)[\s№:.-]*)?\d{6})(?:\D|$)'
+        keywords: ["паспорт", "серия"]
         masking:
           capture_groups: [1]
           placeholder: "PASSPORT_RF"
+
+      - rule_id: pii.docs.kpp
+        name: pii.docs.kpp
+        # КПП — 9 chars (4 tax-authority + 2 reason + 3 serial). A bare 9-digit run
+        # is noisy, so the "кпп" keyword (up to 3 filler words away) is required.
+        regex: '(?i)кпп(?:[\s,.:;!?()«»"\x27-]+[а-яёa-z]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{4}[\dА-ЯA-Z]{2}\d{3})\b'
+        keywords: ["кпп"]
+        masking:
+          capture_groups: [1]
+          placeholder: "KPP"
+
+      - rule_id: pii.docs.address
+        name: pii.docs.address
+        # RU postal address: optional "г. City," + a street-type marker
+        # (ул./пр./пер./шоссе/…) + name + house number, optionally extended with
+        # корпус/строение and кв./подъезд/офис. The street marker is the precision
+        # anchor; bare "Name Number" pairs are deliberately NOT matched.
+        regex: '(?i)((?:г\.?\s?[ЁА-Я][ёа-я\-]+,?\s+)?(?:ул(?:ица)?|пр-т|пр\.|просп(?:ект)?|пер(?:еул(?:ок)?)?\.?|пл(?:ощадь)?|б-р|бул(?:ьвар)?|шоссе|наб(?:ережная)?)\.?\s+(?:[ЁА-Яа-яё0-9][ёа-яЁА-Я0-9.\-]*\s+){1,3}(?:д\.?\s?)?\d+[а-я]?(?:\s?(?:к(?:орп(?:ус)?)?|стр(?:оение)?)\.?\s?\d+)?(?:[,\s]+(?:кв(?:артира)?|подъезд|под|офис)\.?\s?\d+[а-я]?)?)'
+        masking:
+          capture_groups: [1]
+          placeholder: "ADDRESS"
 
       - rule_id: pii.docs.inn-person
         name: pii.docs.inn-person
@@ -419,3 +451,14 @@ guardrails_regex_rules:
         validators: [iban_mod97]
         masking:
           placeholder: "IBAN"
+
+      - rule_id: pii.fin.cvc
+        name: pii.fin.cvc
+        # Card CVC/CVV — 3 digits. A bare 3-digit run is hopelessly common, so a
+        # cvc/cvv/цвс keyword (or "код безопасности") within three words is the
+        # precision anchor. Generic "код NNN" without a CVC keyword is left alone.
+        regex: '(?i)(?:cvc|cvv|цвс|cvv2|cvc2|код\s+безопасности)(?:[\s,.:;!?()«»"\x27-]+[а-яёa-z]+){0,3}[\s,.:;!?()«»"\x27-]*(\d{3})\b'
+        keywords: ["cvc", "cvv", "цвс"]
+        masking:
+          capture_groups: [1]
+          placeholder: "CVC"

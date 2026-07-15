@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 260
-	expectedRealConfigCases = 271
+	expectedGenConfigRules  = 264
+	expectedRealConfigCases = 275
 )
 
 type genConfigRuleCase struct {
@@ -128,6 +128,7 @@ func TestRealConfigCaptureGroupDecisionsAreExplicit(t *testing.T) {
 		"credentials.curl-auth-header.gl":       {},
 		"credentials.curl-auth-user.gl":         {},
 		"credentials.kubernetes-secret-yaml.gl": {},
+		"access_tokens.generic-token":           {},
 	}
 
 	for _, rl := range rulesByID {

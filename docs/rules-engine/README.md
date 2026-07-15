@@ -33,7 +33,7 @@ type Rule struct {
 
 ## Источники правил
 
-1. `configs/guardrails_regex_rules.yaml` — ручные (~41 правило: ФИО (3 формата) и российские PII с
+1. `configs/guardrails_regex_rules.yaml` — ручные (~45 правил: ФИО (3 формата), паспорт, СНИЛС, ИНН, ОГРН, ОГРНИП, КПП, CVC, адрес, телефон, email, карта с
    контрольными суммами — СНИЛС, ИНН физлица/юрлица, ОГРН/ОГРНИП, паспорт; платёжные
    карты с Luhn; IBAN mod-97; email'ы; телефоны РФ; IP).
 2. `configs/guardrails_regex_rules.gitleaks.generated.yaml` — ~220 правил,
@@ -52,7 +52,7 @@ type Rule struct {
 
 ```mermaid
 flowchart TD
-    YAML["configs/guardrails_regex_rules.yaml<br/>41 ручное правило"] --> LOAD["rule.LoadAllFromFiles<br/>дедуп путей, отказ при дубле rule_id"]
+    YAML["configs/guardrails_regex_rules.yaml<br/>45 ручных правил"] --> LOAD["rule.LoadAllFromFiles<br/>дедуп путей, отказ при дубле rule_id"]
     GEN["configs/guardrails_regex_rules.gitleaks.generated.yaml<br/>220 сгенерированных правил"] --> LOAD
     LOAD --> FILES["fileRules — неизменяемый встроенный набор"]
     STORE["store.ListRules<br/>кастомные правила из API"] --> MERGE

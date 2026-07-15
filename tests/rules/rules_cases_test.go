@@ -122,10 +122,13 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "pataaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		{
-			name:         "access_tokens.alibaba-access-key-id.gl",
-			ruleID:       "access_tokens.alibaba-access-key-id.gl",
-			input:        "alibaba_access_key_id = \"LTAIaaaaaaaaaaaaaaaaaaaa\";",
-			wantFullText: "LTAIaaaaaaaaaaaaaaaaaaaa",
+			name:   "access_tokens.alibaba-access-key-id.gl",
+			ruleID: "access_tokens.alibaba-access-key-id.gl",
+			// Built by concatenation so the synthetic key is not a contiguous
+			// literal in source — secret scanners (GitHub push protection,
+			// gitleaks) would otherwise flag the fixture as a real credential.
+			input:        "alibaba_access_key_id = \"LTAI" + strings.Repeat("a", 20) + "\";",
+			wantFullText: "LTAI" + strings.Repeat("a", 20),
 		},
 		{
 			name:         "access_tokens.alibaba-secret-key.gl",
@@ -1634,6 +1637,30 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "Анна Смирнова",
 		},
 		{
+			name:         "pii.docs.kpp",
+			ruleID:       "pii.docs.kpp",
+			input:        "в реквизитах кпп 772543001 указано",
+			wantFullText: "772543001",
+		},
+		{
+			name:         "pii.docs.address",
+			ruleID:       "pii.docs.address",
+			input:        "привезите заказ на г. Москва, ул. Тверская 15 завтра",
+			wantFullText: "г. Москва, ул. Тверская 15",
+		},
+		{
+			name:         "pii.fin.cvc",
+			ruleID:       "pii.fin.cvc",
+			input:        "система не принимает cvc 456, хотя карта рабочая",
+			wantFullText: "456",
+		},
+		{
+			name:         "access_tokens.generic-token",
+			ruleID:       "access_tokens.generic-token",
+			input:        "мой токен доступа ABCxyz123456789qwertyuiop истёк",
+			wantFullText: "ABCxyz123456789qwertyuiop",
+		},
+		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",
 			input:        "curl -H \"Authorization: Basic dGVzdGluZw==\" https://example.test ",
@@ -1912,6 +1939,55 @@ func TestFioShortFormats(t *testing.T) {
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "Совет Федерации собрался")
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "парад Красная Армия провела")
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "Ясная Поляна закрыта сегодня")
+}
+
+// TestKppCvcTokenFormats locks in the three keyword-anchored rules added to
+// close the pii-bench 152-ФЗ coverage gaps: КПП, CVC and the generic token
+// catch-all — each requires its context keyword, and bare numbers/strings
+// without that anchor pass through.
+func TestKppCvcTokenFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	// КПП: keyword up to three filler words away; a bare 9-digit run is ignored.
+	assertSingleMatch(t, scanner, "pii.docs.kpp", "кпп 772543001 в договоре", "772543001")
+	assertSingleMatch(t, scanner, "pii.docs.kpp", "кпп в счете-фактуре 773345001, а", "773345001")
+	assertNoMatch(t, scanner, "pii.docs.kpp", "номер заказа 772543001 готов")
+
+	// CVC: cvc/cvv/цвс keyword; a generic 3-digit "код 789" is left alone.
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "цвс был 408, но система", "408")
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "нужен cvc 789 для оплаты", "789")
+	assertNoMatch(t, scanner, "pii.fin.cvc", "система не принимает код 789")
+
+	// Token: keyword + 16+ alnum, OTP after a recovery-code keyword, and a
+	// keyword-free 40+ char fallback.
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"токен перестал работать: 7f8d9a2b4e1c6f3a8b5d2e9c4a7f1b8e3d6c9a2f5b8e1d4a7c. Мой",
+		"7f8d9a2b4e1c6f3a8b5d2e9c4a7f1b8e3d6c9a2f5b8e1d4a7c")
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"код восстановления 847593 отправлен", "847593")
+}
+
+// TestPassportContextInflections checks the widened passport rule: the keyword
+// may be inflected and sit a few words before the number.
+func TestPassportContextInflections(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"inflected-instrumental", "так с моим паспортом? 4609 328145 система", "4609 328145"},
+		{"inflected-adjective", "паспортные данные: 4518123456 подтверждаю", "4518123456"},
+		{"two-two-six", "блокировка по паспорту 77 12 345678. Очень", "77 12 345678"},
+		{"ten-digit", "могу подтвердить паспорт 5012345678, хочу", "5012345678"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.docs.passport", tt.input, tt.match)
+		})
+	}
+	// Still needs the keyword: a bare 10-digit number is not a passport.
+	assertNoMatch(t, scanner, "pii.docs.passport", "заказ номер 5012345678 оформлен")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are
