@@ -13,7 +13,10 @@ const (
 	ValidatorIBANMod97   ValidatorType = "iban_mod97"
 	ValidatorEmailASCII  ValidatorType = "email_ascii"
 	ValidatorPaymentCard ValidatorType = "payment_card"
-	ValidatorEntropy     ValidatorType = "entropy"
+	// ValidatorPaymentCardNoLuhn checks card brand+length but NOT the Luhn
+	// checksum — for the keyword-gated fallback that masks typo'd/synthetic cards.
+	ValidatorPaymentCardNoLuhn ValidatorType = "payment_card_no_luhn"
+	ValidatorEntropy           ValidatorType = "entropy"
 	ValidatorBanlist     ValidatorType = "banlist"
 	ValidatorIPv4        ValidatorType = "ip_v4"
 	ValidatorIPv6        ValidatorType = "ip_v6"

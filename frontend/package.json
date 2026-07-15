@@ -1,6 +1,6 @@
 {
   "name": "guardrails-ui",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Unified management console for the guardrails and extproc-guardrails services",

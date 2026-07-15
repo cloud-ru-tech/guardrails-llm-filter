@@ -310,6 +310,8 @@ export const t = {
     untilShort: 'По',
     rfc3339Title: 'RFC3339 (UTC), например 2026-01-01T00:00:00Z',
     detectHint: 'Записано в режиме detect: трафик сканировался, но не маскировался',
+    modeClientHint:
+      'Среди загруженных записей нет с выбранным режимом — нажмите «Загрузить ещё», чтобы проверить остальные.',
     dataTypesAll: 'Все типы данных',
     detail: {
       title: 'Запись аудита',
@@ -339,6 +341,7 @@ export const t = {
       health: 'Доступность',
       healthy: 'доступен',
       unhealthy: 'недоступен',
+      checking: 'Проверяем доступность…',
       mode: 'Режим',
       store: 'Хранилище',
       topology: 'Топология',
@@ -376,11 +379,12 @@ export const t = {
       scrapeTitle: 'Фрагмент prometheus.yml',
       copy: 'Скопировать',
       copied: 'Скопировано',
+      copyFailed: 'Не удалось скопировать — выделите текст вручную',
       alertsTitle: 'Готовые алерты',
       alertsHint:
         'Правила алертинга (fail-open маскирование, ошибки демаскирования, недоступность скрейпа) лежат в репозитории:',
       alertsK8s: 'для prometheus-operator — PrometheusRule в',
-      metricsDoc: 'Справочник всех метрик — docs/operations.md.',
+      metricsDoc: 'Справочник всех метрик — docs/operations.',
     },
     grafana: {
       section: 'Дашборд Grafana',

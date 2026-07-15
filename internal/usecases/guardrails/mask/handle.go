@@ -68,8 +68,11 @@ func (uc *UseCase) Handle(ctx context.Context, cmd Command) (CommandResponse, er
 	metrics.ObserveMaskScanTotalBytes(totalTextBytes)
 
 	// Phase B: mask sequentially in text order through one masker, so
-	// placeholder numbering and cross-text dedup stay deterministic.
-	m := newMasker()
+	// placeholder numbering and cross-text dedup stay deterministic. The masker
+	// is seeded with any <TYPE_N> literals already present in the source texts so
+	// a generated placeholder never collides with one (which would corrupt the
+	// literal on demask).
+	m := newMasker(reservedPlaceholders(cmd.Texts))
 	maskedTexts := make([]string, len(cmd.Texts))
 	for i, text := range cmd.Texts {
 		if len(results[i].matches) == 0 {

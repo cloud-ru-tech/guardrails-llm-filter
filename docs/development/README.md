@@ -20,7 +20,7 @@ go test ./internal/controller/gateway/   # тесты data-path
 
 Бинарь с консолью — двухступенчатая сборка: SPA попадает в `frontend/dist`, откуда
 её подхватывает `//go:embed all:dist` (`frontend/embed.go`); `make docker-build`
-делает то же самое внутри стадии `node:22-alpine` Dockerfile.
+делает то же самое внутри стадии `node:24-alpine` Dockerfile.
 
 ```mermaid
 flowchart LR

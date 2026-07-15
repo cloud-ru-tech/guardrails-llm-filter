@@ -4,7 +4,7 @@ import { Divider } from '@snack-uikit/divider';
 import { FieldSelect } from '@snack-uikit/fields';
 import { EyeClosedSVG, FilterSVG, FunctionSettingsSVG } from '@snack-uikit/icons';
 import { toaster } from '@snack-uikit/toaster';
-import { Switch } from '@snack-uikit/toggles';
+import { Radio, Switch } from '@snack-uikit/toggles';
 import { Typography } from '@snack-uikit/typography';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -30,18 +30,22 @@ function typesKey(types: number[]): string {
 }
 
 /**
- * One mode option: a snack-uikit selection Card (outline + checked) — the DS's
- * native "выбран/не выбран" pattern. The Card handles click and keyboard;
- * radio semantics are provided via aria attributes on the group and cards.
+ * One mode option: a snack-uikit Card as the visual tile with a REAL Radio
+ * input inside a full-bleed label. The native radio group supplies the
+ * click target, keyboard model and screen-reader semantics (snack Card is a
+ * role-less div, so ARIA attributes on it are ignored); the Card's `checked`
+ * prop only drives the DS selected styling.
  */
 function ModeTile({
   checked,
+  value,
   title,
   description,
   consequence,
   onSelect,
 }: {
   checked: boolean;
+  value: Mode;
   title: string;
   description: string;
   /** Amber protection-consequence line (detect only). */
@@ -49,26 +53,36 @@ function ModeTile({
   onSelect: () => void;
 }) {
   return (
-    <Card
-      outline
-      size="s"
-      checked={checked}
-      onClick={onSelect}
-      className={styles.modeCard}
-      aria-checked={checked}
-      header={<Card.Header title={title} description={description} truncate={{ description: 4 }} />}
-    >
-      {consequence && (
-        <Typography
-          family="sans"
-          purpose="body"
-          size="s"
-          tag="span"
-          className={styles.modeTileConsequence}
-        >
-          {consequence}
-        </Typography>
-      )}
+    <Card outline size="s" checked={checked} className={styles.modeCard}>
+      <label className={styles.modeTileLabel}>
+        <Radio
+          checked={checked}
+          name="guardrails-mode"
+          value={value}
+          onChange={(next) => {
+            if (next) onSelect();
+          }}
+        />
+        <span className={styles.modeTileText}>
+          <Typography family="sans" purpose="label" size="m" tag="span">
+            {title}
+          </Typography>
+          <Typography family="sans" purpose="body" size="s" tag="span" className={styles.hint}>
+            {description}
+          </Typography>
+          {consequence && (
+            <Typography
+              family="sans"
+              purpose="body"
+              size="s"
+              tag="span"
+              className={styles.modeTileConsequence}
+            >
+              {consequence}
+            </Typography>
+          )}
+        </span>
+      </label>
     </Card>
   );
 }
@@ -208,15 +222,17 @@ export function SettingsPage() {
               />
             }
           >
-            <div className={styles.modeTiles} aria-label={t.settings.mode}>
+            <div className={styles.modeTiles} role="radiogroup" aria-label={t.settings.mode}>
               <ModeTile
                 checked={mode === 'enforce'}
+                value="enforce"
                 title={t.settings.modeEnforce}
                 description={t.settings.modeEnforceDesc}
                 onSelect={() => setMode('enforce')}
               />
               <ModeTile
                 checked={mode === 'detect'}
+                value="detect"
                 title={t.settings.modeDetect}
                 description={t.settings.modeDetectDesc}
                 consequence={t.settings.modeDetectConsequence}
@@ -274,6 +290,12 @@ export function SettingsPage() {
               </Typography>
             )}
           </div>
+
+          {/* PUT replaces the WHOLE settings document — a concurrent editor's
+              save silently overwrites yours, so the caveat stays visible. */}
+          <Typography family="sans" purpose="body" size="s" tag="div" className={styles.hint}>
+            {t.settings.modeResetWarning}
+          </Typography>
         </form>
       </QueryBoundary>
     </div>

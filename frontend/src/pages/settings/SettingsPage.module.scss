@@ -37,6 +37,21 @@
   width: 100%;
 }
 
+// The label fills the tile so the whole card is the radio's click target.
+.modeTileLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.modeTileText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 // Detect's protection-consequence line: amber, never red (red = errors only).
 .modeTileConsequence {
   color: var(--sys-yellow-text-main);

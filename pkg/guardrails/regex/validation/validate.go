@@ -48,6 +48,10 @@ func Validate(candidate string, rl rule.Rule) bool {
 			if !PaymentCardValid(digits) {
 				return false
 			}
+		case rule.ValidatorPaymentCardNoLuhn:
+			if !PaymentCardShape(digits) {
+				return false
+			}
 		case rule.ValidatorEntropy:
 			if rl.Entropy > 0 && ShannonEntropy(candidate) < rl.Entropy {
 				return false
@@ -96,6 +100,7 @@ func IsKnown(validator rule.ValidatorType) bool {
 		rule.ValidatorIBANMod97,
 		rule.ValidatorEmailASCII,
 		rule.ValidatorPaymentCard,
+		rule.ValidatorPaymentCardNoLuhn,
 		rule.ValidatorEntropy,
 		rule.ValidatorBanlist,
 		rule.ValidatorIPv4,

@@ -122,10 +122,13 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "pataaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		{
-			name:         "access_tokens.alibaba-access-key-id.gl",
-			ruleID:       "access_tokens.alibaba-access-key-id.gl",
-			input:        "alibaba_access_key_id = \"LTAIaaaaaaaaaaaaaaaaaaaa\";",
-			wantFullText: "LTAIaaaaaaaaaaaaaaaaaaaa",
+			name:   "access_tokens.alibaba-access-key-id.gl",
+			ruleID: "access_tokens.alibaba-access-key-id.gl",
+			// Built by concatenation so the synthetic key is not a contiguous
+			// literal in source — secret scanners (GitHub push protection,
+			// gitleaks) would otherwise flag the fixture as a real credential.
+			input:        "alibaba_access_key_id = \"LTAI" + strings.Repeat("a", 20) + "\";",
+			wantFullText: "LTAI" + strings.Repeat("a", 20),
 		},
 		{
 			name:         "access_tokens.alibaba-secret-key.gl",
@@ -1604,6 +1607,12 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "4111 1111 1111 1111",
 		},
 		{
+			name:         "pii.fin.credit-card.context",
+			ruleID:       "pii.fin.credit-card.context",
+			input:        "оплата по карте 4279 3811 5566 7788 вчера",
+			wantFullText: "4279 3811 5566 7788",
+		},
+		{
 			name:         "pii.fin.iban",
 			ruleID:       "pii.fin.iban",
 			input:        "beneficiary_iban = \"GB82 WEST 1234 5698 7654 32\"",
@@ -1614,6 +1623,54 @@ func realConfigRuleCases() []realConfigRuleCase {
 			ruleID:       "pii.phone-ru",
 			input:        "contact_phone = \"+7-(111)-111-11-11\"",
 			wantFullText: "+7-(111)-111-11-11",
+		},
+		{
+			name:         "pii.fio-ru",
+			ruleID:       "pii.fio-ru",
+			input:        "Заявка на пропуск: Смирнова Анна Сергеевна, дата визита — 15 июля.",
+			wantFullText: "Смирнова Анна Сергеевна",
+		},
+		{
+			name:         "pii.fio-ru.initials",
+			ruleID:       "pii.fio-ru.initials",
+			input:        "Ответственный: Смирнова А.С., кабинет 14.",
+			wantFullText: "Смирнова А.С.",
+		},
+		{
+			name:         "pii.fio-ru.short",
+			ruleID:       "pii.fio-ru.short",
+			input:        "встреча с Анна Смирнова в офисе",
+			wantFullText: "Анна Смирнова",
+		},
+		{
+			name:         "pii.docs.kpp",
+			ruleID:       "pii.docs.kpp",
+			input:        "в реквизитах кпп 772543001 указано",
+			wantFullText: "772543001",
+		},
+		{
+			name:         "pii.docs.address",
+			ruleID:       "pii.docs.address",
+			input:        "привезите заказ на г. Москва, ул. Тверская 15 завтра",
+			wantFullText: "г. Москва, ул. Тверская 15",
+		},
+		{
+			name:         "pii.fin.cvc",
+			ruleID:       "pii.fin.cvc",
+			input:        "система не принимает cvc 456, хотя карта рабочая",
+			wantFullText: "456",
+		},
+		{
+			name:         "access_tokens.generic-token",
+			ruleID:       "access_tokens.generic-token",
+			input:        "мой токен доступа ABCxyz123456789qwertyuiop истёк",
+			wantFullText: "ABCxyz123456789qwertyuiop",
+		},
+		{
+			name:         "access_tokens.generic-long-token",
+			ruleID:       "access_tokens.generic-long-token",
+			input:        "старый ZXCasd123QWEzxc456RTYfgh789UIOjkl012 истёк",
+			wantFullText: "ZXCasd123QWEzxc456RTYfgh789UIOjkl012",
 		},
 		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
@@ -1789,6 +1846,244 @@ func TestPassportFormats(t *testing.T) {
 	bare := series + number // 4509123456
 	assertNoMatch(t, scanner, "pii.docs.passport", bare)
 	assertNoMatch(t, scanner, "pii.docs.passport", "номер заказа "+bare+" готов")
+}
+
+// TestFioRuFormats locks in Russian full-name detection: the patronymic suffix
+// (-вич/-вна/-ична) is the precision anchor, both word orders are covered
+// (Фамилия Имя Отчество and Имя Отчество Фамилия, incl. hyphenated surnames),
+// and capitalized sequences WITHOUT a patronymic never match.
+func TestFioRuFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"surname-first", "пропуск для Смирнова Анна Сергеевна, стол 5", "Смирнова Анна Сергеевна"},
+		{"surname-last", "командирован Иван Петрович Сидоров сегодня", "Иван Петрович Сидоров"},
+		{"male-patronymic", "исполнитель: Кузнецов Пётр Иванович.", "Кузнецов Пётр Иванович"},
+		{"ichna-patronymic", "заявитель Фомина Мария Ильинична принята", "Фомина Мария Ильинична"},
+		{"hyphenated-surname", "докладчик Петрова-Водкина Анна Сергеевна выступит", "Петрова-Водкина Анна Сергеевна"},
+		{"start-of-text", "Смирнова Анна Сергеевна оформила пропуск", "Смирнова Анна Сергеевна"},
+		{"short-ich", "мастер Кузьмин Иван Ильич проверил", "Кузьмин Иван Ильич"},
+		{"genitive", "заявление от Смирновой Анны Сергеевны получено", "Смирновой Анны Сергеевны"},
+		{"dative-male", "выдать Иванову Ивану Ивановичу пропуск", "Иванову Ивану Ивановичу"},
+		{"instrumental-male", "подписано Кузнецовым Петром Ивановичем вчера", "Кузнецовым Петром Ивановичем"},
+		{"prepositional-female", "сведения о Павловой Ольге Сергеевне уточнены", "Павловой Ольге Сергеевне"},
+		{"all-caps", "СМИРНОВА АННА СЕРГЕЕВНА — посетитель", "СМИРНОВА АННА СЕРГЕЕВНА"},
+		{"all-caps-male", "пропуск: ИВАНОВ ИВАН ИВАНОВИЧ, стол 3", "ИВАНОВ ИВАН ИВАНОВИЧ"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru", tt.input, tt.match)
+		})
+	}
+
+	// No patronymic anchor -> no match FOR THIS RULE: bare pairs and initials
+	// belong to pii.fio-ru.short / pii.fio-ru.initials; arbitrary capitalized
+	// triples and ALL-CAPS headings must pass through entirely.
+	assertNoMatch(t, scanner, "pii.fio-ru", "встреча с Анна Смирнова в офисе")
+	assertNoMatch(t, scanner, "pii.fio-ru", "Общество Ромашка Москва открыло филиал")
+	assertNoMatch(t, scanner, "pii.fio-ru", "Заявка На Пропуск оформлена")
+	assertNoMatch(t, scanner, "pii.fio-ru", "ООО РОГА И КОПЫТА открыло филиал")
+	assertNoMatch(t, scanner, "pii.fio-ru", "СРОЧНО ОФОРМИТЬ ПРОПУСК сегодня")
+}
+
+// TestFioInitialsFormats: surname + initials in both orders, lowercase and
+// ALL-CAPS surnames, with and without a space between the initials. Single
+// initials («пункт А.») and lone dotted abbreviations must not match.
+func TestFioInitialsFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"surname-first", "подпись: Смирнова А.С. стоит", "Смирнова А.С."},
+		{"surname-first-spaced", "исполнитель Кузнецов П. И. отвечает", "Кузнецов П. И."},
+		{"initials-first", "докладчик А.С. Смирнова выступает", "А.С. Смирнова"},
+		{"initials-first-spaced", "утвердил И. И. Иванов вчера", "И. И. Иванов"},
+		{"caps-surname", "пропуск: СМИРНОВА А.С. выдан", "СМИРНОВА А.С."},
+		{"hyphenated-surname", "автор Петрова-Водкина А.С. указана", "Петрова-Водкина А.С."},
+		{"declined-surname", "заявление Смирновой А.С. принято", "Смирновой А.С."},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru.initials", tt.input, tt.match)
+		})
+	}
+
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "см. пункт А. договора")
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "формат А4 и лист Б5")
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "т.е. вопрос закрыт")
+}
+
+// TestFioShortFormats: first-name dictionary anchors the two-word form.
+// Branch A: dictionary name (with declension) + free-form capitalized
+// surname; branch B: suffix-looking surname + dictionary name. Capitalized
+// non-name pairs must pass through.
+func TestFioShortFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"name-surname", "встреча с Анна Смирнова в офисе", "Анна Смирнова"},
+		{"surname-name", "сотрудник Смирнова Анна на месте", "Смирнова Анна"},
+		{"declined-pair", "пригласили Анну Смирнову на встречу", "Анну Смирнову"},
+		{"male-pair", "заказ передан Иван Кузнецов лично", "Иван Кузнецов"},
+		{"male-declined", "документы у Ивана Кузнецова остались", "Ивана Кузнецова"},
+		{"yo-name", "дежурит Пётр Николаев сегодня", "Пётр Николаев"},
+		{"non-suffix-surname", "менеджер Мария Жук ответила", "Мария Жук"},
+		{"adjectival-surname-first", "сотрудник Белая Мария на месте", "Белая Мария"},
+		{"adjectival-surname-decl", "заявитель Достоевская Анна пришла", "Достоевская Анна"},
+		{"ko-surname", "звонил Иван Шевченко вчера", "Иван Шевченко"},
+		{"name-patronymic", "Здравствуйте, Анна Сергеевна, проходите", "Анна Сергеевна"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru.short", tt.input, tt.match)
+		})
+	}
+
+	// Capitalized pairs without a dictionary-name anchor stay untouched —
+	// including adjective-first phrases whose second word is not a name.
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "поезд Москва Ростов отправился")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Красная Площадь закрыта сегодня")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Совет Федерации собрался")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "парад Красная Армия провела")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Ясная Поляна закрыта сегодня")
+}
+
+// TestKppCvcTokenFormats locks in the three keyword-anchored rules added to
+// close the pii-bench 152-ФЗ coverage gaps: КПП, CVC and the generic token
+// catch-all — each requires its context keyword, and bare numbers/strings
+// without that anchor pass through.
+// TestAddressFormats locks in the three address shapes and the precision
+// guards: a street/apartment anchor is always required, a bare word is not.
+func TestAddressFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"marker-first-city", "жду заказ на г. Москва, ул. Тверская 15 завтра", "г. Москва, ул. Тверская 15"},
+		{"marker-first-apt", "адрес: ул. Гагарина 23 кв 45 приезжайте", "ул. Гагарина 23 кв 45"},
+		{"marker-after-name", "жду на Невский проспект 88 сегодня", "Невский проспект 88"},
+		{"marker-after-comma", "заказ на Ленинградский проспект, дом 45, квартира 12", "Ленинградский проспект, дом 45, квартира 12"},
+		{"apartment-anchor", "жду доставку Чехова 44 кв 78 вечером", "Чехова 44 кв 78"},
+		{"korpus-anchor", "адрес Московская 156 подъезд 2 тут", "Московская 156 подъезд 2"},
+		// New street-type markers алл./ш. — capitalised name required, like the rest.
+		{"alleya-marker", "жду алл. Черемуховая 49 сегодня", "алл. Черемуховая 49"},
+		{"shosse-abbrev-marker", "адрес ш. Энтузиастов 12 кв 3 приезжайте", "ш. Энтузиастов 12 кв 3"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.docs.address", tt.input, tt.match)
+		})
+	}
+	// A street marker glued inside a word (артик-УЛ) must not fire; a bare
+	// capitalized pair with no marker/suffix passes through.
+	assertNoMatch(t, scanner, "pii.docs.address", "артикул товара 789012 закончился")
+	assertNoMatch(t, scanner, "pii.docs.address", "поезд Москва Ростов прибыл")
+	// Precision guard: the street NAME must be capitalised. A lowercase relaxation
+	// (allow "наб. абрикосовая 66 кв. 5") was tried and reverted — abbreviated
+	// markers are omonyms of common words (пл.=площадь, пр.=прочее), so a lowercase
+	// name + apartment anchor fires on ordinary construction/legal prose. These
+	// regression guards come from an adversarial precision hunt.
+	assertNoMatch(t, scanner, "pii.docs.address", "доставка наб. абрикосовая 66 кв. 5 завтра")
+	assertNoMatch(t, scanner, "pii.docs.address", "Общая пл. кухни и коридора 18 кв. 6 в смете")
+	assertNoMatch(t, scanner, "pii.docs.address", "Мебель, техника и пр. позиции 7, офис 4 переданы")
+	assertNoMatch(t, scanner, "pii.docs.address", "по улице гуляли 2 часа подряд")
+}
+
+// TestCreditCardContextFormats locks in the keyword-gated no-Luhn card fallback:
+// a card-shaped number NEAR a card keyword is masked even if its Luhn checksum
+// fails (typo / synthetic), while the keyword gate + brand-shape validator keep
+// precision — no keyword, or a non-card shape, means no match.
+func TestCreditCardContextFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		// Luhn-invalid but card-shaped, near a card keyword → masked.
+		{"mir-by-karte", "оплата по карте 2200 3456 7890 1234 прошла", "2200 3456 7890 1234"},
+		{"visa-by-card", "charged card 4279 3811 5566 7788 today", "4279 3811 5566 7788"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fin.credit-card.context", tt.input, tt.match)
+		})
+	}
+	// No card keyword → the fallback stays silent (Luhn rule already rejects it).
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "перевод 2200 3456 7890 1234 выполнен")
+	// Keyword present but the number is not a valid card shape (13-digit OGRN-like)
+	// → brand-shape validator rejects it.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "карта 5123456789012 в реестре")
+	// Precision guards from an adversarial FP hunt:
+	// (1) omonym — a letter right after "карт..." (картЕЛЬ) means it is not a card word.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "Картель по делу 2200 1122 3344 5566 обсуждали")
+	// (2) a real card word but the card-shaped number is one WORD away (order/account
+	//     number), not adjacent → not a PAN.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "По карте заказ 4200123456789012 оформлен на доставку")
+}
+
+func TestKppCvcTokenFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	// КПП: keyword up to three filler words away; a bare 9-digit run is ignored.
+	assertSingleMatch(t, scanner, "pii.docs.kpp", "кпп 772543001 в договоре", "772543001")
+	assertSingleMatch(t, scanner, "pii.docs.kpp", "кпп в счете-фактуре 773345001, а", "773345001")
+	assertNoMatch(t, scanner, "pii.docs.kpp", "номер заказа 772543001 готов")
+
+	// CVC: cvc/cvv/цвс keyword; a generic 3-digit "код 789" is left alone.
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "цвс был 408, но система", "408")
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "нужен cvc 789 для оплаты", "789")
+	assertSingleMatch(t, scanner, "pii.fin.cvc", "код на обороте карты 274 введите", "274")
+	assertNoMatch(t, scanner, "pii.fin.cvc", "система не принимает код 789")
+	assertNoMatch(t, scanner, "pii.fin.cvc", "три цифры пароля 123 неверны")
+
+	// Token: keyword + 16+ alnum, OTP after a recovery-code keyword, and a
+	// keyword-free 40+ char fallback.
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"токен перестал работать: 7f8d9a2b4e1c6f3a8b5d2e9c4a7f1b8e3d6c9a2f5b8e1d4a7c. Мой",
+		"7f8d9a2b4e1c6f3a8b5d2e9c4a7f1b8e3d6c9a2f5b8e1d4a7c")
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"код восстановления 847593 отправлен", "847593")
+	assertSingleMatch(t, scanner, "access_tokens.generic-token",
+		"используйте API ключ api_3f8e9d2c1b4a5f6e7d8c9b0a1f2e3d4 для доступа",
+		"api_3f8e9d2c1b4a5f6e7d8c9b0a1f2e3d4")
+	// The long-token fallback catches mixed-case tokens but NOT lowercase hex
+	// hashes / UUIDs (they read as ordinary technical identifiers).
+	assertSingleMatch(t, scanner, "access_tokens.generic-long-token",
+		"старый pQ6rS8tU0vX3yZ5aB7cD9eF1gH3jK5mN7pR9sT истёк",
+		"pQ6rS8tU0vX3yZ5aB7cD9eF1gH3jK5mN7pR9sT")
+	assertNoMatch(t, scanner, "access_tokens.generic-long-token",
+		"commit a1b2c3d4e5f6789012345678901234567890abcd смержен")
+	assertNoMatch(t, scanner, "access_tokens.generic-long-token",
+		"UUID 550e8400e29b41d4a716446655440000 в базе")
+}
+
+// TestPassportContextInflections checks the widened passport rule: the keyword
+// may be inflected and sit a few words before the number.
+func TestPassportContextInflections(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"inflected-instrumental", "так с моим паспортом? 4609 328145 система", "4609 328145"},
+		{"inflected-adjective", "паспортные данные: 4518123456 подтверждаю", "4518123456"},
+		{"two-two-six", "блокировка по паспорту 77 12 345678. Очень", "77 12 345678"},
+		{"ten-digit", "могу подтвердить паспорт 5012345678, хочу", "5012345678"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.docs.passport", tt.input, tt.match)
+		})
+	}
+	// Still needs the keyword: a bare 10-digit number is not a passport.
+	assertNoMatch(t, scanner, "pii.docs.passport", "заказ номер 5012345678 оформлен")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are

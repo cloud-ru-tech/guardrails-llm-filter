@@ -31,10 +31,27 @@ function fmtMs(seconds?: number, count?: number): string {
 }
 
 function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
-  const copy = () => {
-    navigator.clipboard
-      .writeText(code)
-      .then(() => toaster.userAction.success({ label: t.monitoring.prometheus.copied }));
+  const copy = async () => {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        // The console commonly runs on plain HTTP (:9080) where the async
+        // clipboard API is unavailable — fall back to the legacy path.
+        const area = document.createElement('textarea');
+        area.value = code;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        if (!ok) throw new Error('execCommand copy failed');
+      }
+      toaster.userAction.success({ label: t.monitoring.prometheus.copied });
+    } catch {
+      toaster.userAction.error({ label: t.monitoring.prometheus.copyFailed });
+    }
   };
   return (
     <div className={styles.codeBlock}>
@@ -111,7 +128,12 @@ export function MonitoringPage() {
   };
 
   const m = metrics.data;
-  const healthy = !health.isError && Boolean(health.data);
+  // Three-state health: a still-pending first probe must not read as an outage.
+  const healthState: 'pending' | 'ok' | 'down' = health.isPending
+    ? 'pending'
+    : !health.isError && Boolean(health.data)
+      ? 'ok'
+      : 'down';
   const mode = health.data?.mode ?? version.data?.mode;
 
   const maskedByMode = m?.requests_masked_total ?? {};
@@ -164,6 +186,9 @@ export function MonitoringPage() {
             onClick={() => {
               metrics.refetch();
               health.refetch();
+              // The status band shows version/commit/store — refresh them too,
+              // otherwise a just-rolled-out build keeps its old version here.
+              version.refetch();
             }}
           />
         }
@@ -175,12 +200,22 @@ export function MonitoringPage() {
           <div className={styles.statusBand}>
             <div className={styles.healthCluster}>
               <span
-                className={`${styles.healthDot} ${healthy ? styles.healthDotOk : styles.healthDotBad}`}
+                className={`${styles.healthDot} ${
+                  healthState === 'ok'
+                    ? styles.healthDotOk
+                    : healthState === 'down'
+                      ? styles.healthDotBad
+                      : styles.healthDotPending
+                }`}
                 aria-hidden="true"
               />
               <div className={styles.healthText}>
                 <Typography family="sans" purpose="title" size="s" tag="div">
-                  {healthy ? t.status.healthy : t.status.unhealthy}
+                  {healthState === 'ok'
+                    ? t.status.healthy
+                    : healthState === 'down'
+                      ? t.status.unhealthy
+                      : t.monitoring.status.checking}
                 </Typography>
                 <span className={styles.mutedSmall}>{t.monitoring.status.section}</span>
               </div>

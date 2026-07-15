@@ -11,17 +11,36 @@ import type { paths } from './schema';
  */
 export const client = createClient<paths>({ baseUrl: '' });
 
-/** Error carrying the API's `{ error, details }` body and HTTP status. */
+/**
+ * Error carrying the response body and HTTP status. Handles both body shapes:
+ * the declared OpenAPI `{ error, details }` and the grpc-gateway
+ * `{ code, message, details }` that /v1/* actually emits on RPC errors.
+ */
 export class ApiRequestError extends Error {
   readonly status: number;
   readonly details?: string;
+  /** gRPC status code from the grpc-gateway error body (9 = FailedPrecondition). */
+  readonly grpcCode?: number;
 
-  constructor(status: number, body?: ApiError) {
-    super(body?.error || `Request failed with status ${status}`);
+  constructor(status: number, body?: ApiError & { message?: string; code?: number }) {
+    super(body?.error || body?.message || `Request failed with status ${status}`);
     this.name = 'ApiRequestError';
     this.status = status;
     this.details = body?.details;
+    this.grpcCode = body?.code;
   }
+}
+
+/**
+ * The audit endpoints answer FailedPrecondition → HTTP 400 when
+ * GUARDRAILS_AUDIT_ENABLED=false (404 kept for older builds).
+ */
+export function isAuditDisabledError(err: unknown): boolean {
+  return (
+    err instanceof ApiRequestError &&
+    (err.status === 404 ||
+      (err.status === 400 && (err.grpcCode === 9 || /audit trail is disabled/i.test(err.message))))
+  );
 }
 
 type FetchResult<T> = { data?: T; error?: unknown; response: Response };

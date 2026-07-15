@@ -1,6 +1,7 @@
 package mask
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 
@@ -9,6 +10,11 @@ import (
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/guardrails/regex/scanners/sensitive"
 )
 
+// placeholderLiteralRe matches a <TYPE_N> token — the shape placeholderfmt.Format
+// emits. Used to reserve any such literal already present in a source text so a
+// generated placeholder never collides with it.
+var placeholderLiteralRe = regexp.MustCompile(`<[A-Za-z0-9_]+_[0-9]+>`)
+
 // masker encapsulates per-request masking state: dedup maps and placeholder
 // counters. Created once per Handle() call, used across all texts, then
 // discarded after extracting results.
@@ -16,15 +22,38 @@ type masker struct {
 	originalToPlaceholder map[string]string
 	reps                  []models.Replacement
 	placeholderCounters   map[string]int
+	// reserved holds <TYPE_N> literals already present in the source texts;
+	// nextPlaceholder skips any counter value whose rendered placeholder is in
+	// this set, so demask cannot corrupt a user-supplied placeholder-like token.
+	reserved map[string]struct{}
 
 	seenRules     map[string]struct{}
 	seenDataTypes map[models.DataType]struct{}
 }
 
-func newMasker() *masker {
+// reservedPlaceholders collects <TYPE_N> literals already present across the
+// source texts. Returns nil (the common case) when none are found.
+func reservedPlaceholders(texts []string) map[string]struct{} {
+	var reserved map[string]struct{}
+	for _, t := range texts {
+		if !strings.Contains(t, "<") {
+			continue
+		}
+		for _, tok := range placeholderLiteralRe.FindAllString(t, -1) {
+			if reserved == nil {
+				reserved = make(map[string]struct{})
+			}
+			reserved[tok] = struct{}{}
+		}
+	}
+	return reserved
+}
+
+func newMasker(reserved map[string]struct{}) *masker {
 	return &masker{
 		originalToPlaceholder: make(map[string]string),
 		placeholderCounters:   make(map[string]int),
+		reserved:              reserved,
 		seenRules:             make(map[string]struct{}),
 		seenDataTypes:         make(map[models.DataType]struct{}),
 	}
@@ -104,6 +133,13 @@ func (m *masker) placeholderForOriginal(original, placeholderType string) (strin
 }
 
 func (m *masker) nextPlaceholder(placeholderType string) string {
-	m.placeholderCounters[placeholderType]++
-	return placeholderfmt.Format(placeholderType, m.placeholderCounters[placeholderType])
+	for {
+		m.placeholderCounters[placeholderType]++
+		placeholder := placeholderfmt.Format(placeholderType, m.placeholderCounters[placeholderType])
+		if _, taken := m.reserved[placeholder]; !taken {
+			return placeholder
+		}
+		// The rendered placeholder already appears literally in the input; skip
+		// this counter value so demask cannot rewrite the user's own token.
+	}
 }

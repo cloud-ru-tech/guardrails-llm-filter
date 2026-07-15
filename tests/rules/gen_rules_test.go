@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 257
-	expectedRealConfigCases = 268
+	expectedGenConfigRules  = 266
+	expectedRealConfigCases = 277
 )
 
 type genConfigRuleCase struct {
@@ -128,6 +128,8 @@ func TestRealConfigCaptureGroupDecisionsAreExplicit(t *testing.T) {
 		"credentials.curl-auth-header.gl":       {},
 		"credentials.curl-auth-user.gl":         {},
 		"credentials.kubernetes-secret-yaml.gl": {},
+		"access_tokens.generic-token":           {},
+		"pii.fin.cvc":                         {},
 	}
 
 	for _, rl := range rulesByID {
@@ -183,6 +185,14 @@ func multiCaptureCases() []genConfigRuleCase {
 	atlassianStandalone := "ATATT3" + strings.Repeat("A", 186)
 
 	return []genConfigRuleCase{
+		{
+			// Keyword-free long-token: the auto-generated example is a single
+			// char that fails min_length:32, so supply a real 32+ example.
+			name:         "access_tokens.generic-long-token",
+			ruleID:       "access_tokens.generic-long-token",
+			input:        "старый ZXCasd123QWEzxc456RTYfgh789UIOjkl012 истёк",
+			wantFullText: "ZXCasd123QWEzxc456RTYfgh789UIOjkl012",
+		},
 		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",
@@ -361,6 +371,10 @@ func fixedValidatorCase(ruleID string) (input string, wantFullText string, ok bo
 		return "304500116000157", "304500116000157", true
 	case "pii.fin.credit-card":
 		return "4111 1111 1111 1111", "4111 1111 1111 1111", true
+	case "pii.fin.credit-card.context":
+		// Keyword-gated no-Luhn fallback: card word + a Luhn-invalid but
+		// brand-shaped PAN; group 1 (the PAN) is masked.
+		return "по карте 2200 3456 7890 1234 сегодня", "2200 3456 7890 1234", true
 	case "pii.fin.iban":
 		return "GB82 WEST 1234 5698 7654 32", "GB82 WEST 1234 5698 7654 32", true
 	default:
@@ -429,5 +443,10 @@ func chooseRuneFromClass(ranges []rune) rune {
 			return r
 		}
 	}
-	panic(fmt.Sprintf("no ASCII rune found for char class %v", ranges))
+	// Non-ASCII class (e.g. Cyrillic [А-Яа-яЁё] in the ФИО rule): take the
+	// first rune of the first range.
+	if len(ranges) > 0 {
+		return ranges[0]
+	}
+	panic(fmt.Sprintf("no rune found for char class %v", ranges))
 }
