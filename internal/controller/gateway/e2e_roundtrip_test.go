@@ -166,7 +166,7 @@ func TestE2E_NonStreaming_RoundTrip(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			resp := doPost(t, h, "/v1/chat/completions", chatBody(t, tc.text, false), jsonHdr)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
 			var out struct {
@@ -195,7 +195,7 @@ func TestE2E_SSE_RoundTrip(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			resp := doPost(t, h, "/v1/chat/completions", chatBody(t, tc.text, true), jsonHdr)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			assert.Contains(t, resp.Header.Get("Content-Type"), "text/event-stream")
 
@@ -251,7 +251,7 @@ func TestE2E_MaskingActuallyHappens(t *testing.T) {
 
 	text := "Иванов Иван Петрович, ИНН 500100732259"
 	resp := doPost(t, h, "/v1/chat/completions", chatBody(t, text, false), jsonHdr)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	llmSaw := seen.get()
 	assert.NotContains(t, llmSaw, "Иванов Иван Петрович", "the LLM must not see the raw name")
