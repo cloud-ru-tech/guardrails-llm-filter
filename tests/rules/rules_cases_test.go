@@ -1622,6 +1622,18 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "Смирнова Анна Сергеевна",
 		},
 		{
+			name:         "pii.fio-ru.initials",
+			ruleID:       "pii.fio-ru.initials",
+			input:        "Ответственный: Смирнова А.С., кабинет 14.",
+			wantFullText: "Смирнова А.С.",
+		},
+		{
+			name:         "pii.fio-ru.short",
+			ruleID:       "pii.fio-ru.short",
+			input:        "встреча с Анна Смирнова в офисе",
+			wantFullText: "Анна Смирнова",
+		},
+		{
 			name:         "credentials.curl-auth-header.gl/basic-double",
 			ruleID:       "credentials.curl-auth-header.gl",
 			input:        "curl -H \"Authorization: Basic dGVzdGluZw==\" https://example.test ",
@@ -1827,13 +1839,72 @@ func TestFioRuFormats(t *testing.T) {
 		})
 	}
 
-	// No patronymic anchor -> no match: bare name pairs, arbitrary
-	// capitalized triples and ALL-CAPS headings must pass through.
+	// No patronymic anchor -> no match FOR THIS RULE: bare pairs and initials
+	// belong to pii.fio-ru.short / pii.fio-ru.initials; arbitrary capitalized
+	// triples and ALL-CAPS headings must pass through entirely.
 	assertNoMatch(t, scanner, "pii.fio-ru", "встреча с Анна Смирнова в офисе")
 	assertNoMatch(t, scanner, "pii.fio-ru", "Общество Ромашка Москва открыло филиал")
 	assertNoMatch(t, scanner, "pii.fio-ru", "Заявка На Пропуск оформлена")
 	assertNoMatch(t, scanner, "pii.fio-ru", "ООО РОГА И КОПЫТА открыло филиал")
 	assertNoMatch(t, scanner, "pii.fio-ru", "СРОЧНО ОФОРМИТЬ ПРОПУСК сегодня")
+}
+
+// TestFioInitialsFormats: surname + initials in both orders, lowercase and
+// ALL-CAPS surnames, with and without a space between the initials. Single
+// initials («пункт А.») and lone dotted abbreviations must not match.
+func TestFioInitialsFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"surname-first", "подпись: Смирнова А.С. стоит", "Смирнова А.С."},
+		{"surname-first-spaced", "исполнитель Кузнецов П. И. отвечает", "Кузнецов П. И."},
+		{"initials-first", "докладчик А.С. Смирнова выступает", "А.С. Смирнова"},
+		{"initials-first-spaced", "утвердил И. И. Иванов вчера", "И. И. Иванов"},
+		{"caps-surname", "пропуск: СМИРНОВА А.С. выдан", "СМИРНОВА А.С."},
+		{"hyphenated-surname", "автор Петрова-Водкина А.С. указана", "Петрова-Водкина А.С."},
+		{"declined-surname", "заявление Смирновой А.С. принято", "Смирновой А.С."},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru.initials", tt.input, tt.match)
+		})
+	}
+
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "см. пункт А. договора")
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "формат А4 и лист Б5")
+	assertNoMatch(t, scanner, "pii.fio-ru.initials", "т.е. вопрос закрыт")
+}
+
+// TestFioShortFormats: first-name dictionary anchors the two-word form.
+// Branch A: dictionary name (with declension) + free-form capitalized
+// surname; branch B: suffix-looking surname + dictionary name. Capitalized
+// non-name pairs must pass through.
+func TestFioShortFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		{"name-surname", "встреча с Анна Смирнова в офисе", "Анна Смирнова"},
+		{"surname-name", "сотрудник Смирнова Анна на месте", "Смирнова Анна"},
+		{"declined-pair", "пригласили Анну Смирнову на встречу", "Анну Смирнову"},
+		{"male-pair", "заказ передан Иван Кузнецов лично", "Иван Кузнецов"},
+		{"male-declined", "документы у Ивана Кузнецова остались", "Ивана Кузнецова"},
+		{"yo-name", "дежурит Пётр Николаев сегодня", "Пётр Николаев"},
+		{"non-suffix-surname", "менеджер Мария Жук ответила", "Мария Жук"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fio-ru.short", tt.input, tt.match)
+		})
+	}
+
+	// Capitalized pairs without a dictionary-name anchor stay untouched.
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "поезд Москва Ростов отправился")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Красная Площадь закрыта сегодня")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Совет Федерации собрался")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are

@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 258
-	expectedRealConfigCases = 269
+	expectedGenConfigRules  = 260
+	expectedRealConfigCases = 271
 )
 
 type genConfigRuleCase struct {
