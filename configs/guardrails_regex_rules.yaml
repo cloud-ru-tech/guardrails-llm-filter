@@ -272,13 +272,17 @@ guardrails_regex_rules:
       - rule_id: pii.fio-ru
         name: pii.fio-ru
         # Russian full names (ФИО). Three capitalized Cyrillic words alone are
-        # far too noisy, so the patronymic suffix (-вич/-вна/-ична) is the
-        # precision anchor and both word orders require it:
-        #   "Смирнова Анна Сергеевна" (Ф И О) and "Иван Петрович Сидоров" (И О Ф);
-        # hyphenated surnames (Петрова-Водкина) are covered. RE2 \b is
-        # ASCII-only and never fires next to Cyrillic, hence the explicit
-        # non-letter guards; only capture group 1 (the name) is masked.
-        regex: '(?:^|[^ЁА-Яёа-я])((?:[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?\s+[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:вич|вна|ична))|(?:[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:вич|вна|ична)\s+[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?))(?:[^ЁА-Яёа-я]|$)'
+        # far too noisy, so the patronymic suffix is the precision anchor and
+        # both word orders require it: "Смирнова Анна Сергеевна" (Ф И О) and
+        # "Иван Петрович Сидоров" (И О Ф). Covered: declined forms (от
+        # Смирновой Анны Сергеевны, Иванову Ивану Ивановичу), short -ич
+        # patronymics (Ильич, Кузьмич), hyphenated surnames (Петрова-Водкина)
+        # and ALL-CAPS spellings (СМИРНОВА АННА СЕРГЕЕВНА) via the two
+        # uppercase branches. Suffix grammar: male ич(а|у|ем|е)?, female
+        # вн(а|ы|е|у|ой) / ичн(а|ы|е|у|ой). RE2 \b is ASCII-only and never
+        # fires next to Cyrillic, hence the explicit non-letter guards; only
+        # capture group 1 (the name) is masked.
+        regex: '(?:^|[^ЁА-Яёа-я])((?:[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?\s+[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой)))|(?:[ЁА-Я][ёа-я]+\s+[ЁА-Я][ёа-я]+(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой))\s+[ЁА-Я][ёа-я]+(?:-[ЁА-Я][ёа-я]+)?)|(?:[ЁА-Я]{2,}(?:-[ЁА-Я]{2,})?\s+[ЁА-Я]{2,}\s+[ЁА-Я]+(?:ИЧ(?:А|У|ЕМ|Е)?|ВН(?:А|Ы|Е|У|ОЙ)|ИЧН(?:А|Ы|Е|У|ОЙ)))|(?:[ЁА-Я]{2,}\s+[ЁА-Я]+(?:ИЧ(?:А|У|ЕМ|Е)?|ВН(?:А|Ы|Е|У|ОЙ)|ИЧН(?:А|Ы|Е|У|ОЙ))\s+[ЁА-Я]{2,}(?:-[ЁА-Я]{2,})?))(?:[^ЁА-Яёа-я]|$)'
         masking:
           capture_groups: [1]
           placeholder: "FIO"

@@ -1812,6 +1812,13 @@ func TestFioRuFormats(t *testing.T) {
 		{"ichna-patronymic", "заявитель Фомина Мария Ильинична принята", "Фомина Мария Ильинична"},
 		{"hyphenated-surname", "докладчик Петрова-Водкина Анна Сергеевна выступит", "Петрова-Водкина Анна Сергеевна"},
 		{"start-of-text", "Смирнова Анна Сергеевна оформила пропуск", "Смирнова Анна Сергеевна"},
+		{"short-ich", "мастер Кузьмин Иван Ильич проверил", "Кузьмин Иван Ильич"},
+		{"genitive", "заявление от Смирновой Анны Сергеевны получено", "Смирновой Анны Сергеевны"},
+		{"dative-male", "выдать Иванову Ивану Ивановичу пропуск", "Иванову Ивану Ивановичу"},
+		{"instrumental-male", "подписано Кузнецовым Петром Ивановичем вчера", "Кузнецовым Петром Ивановичем"},
+		{"prepositional-female", "сведения о Павловой Ольге Сергеевне уточнены", "Павловой Ольге Сергеевне"},
+		{"all-caps", "СМИРНОВА АННА СЕРГЕЕВНА — посетитель", "СМИРНОВА АННА СЕРГЕЕВНА"},
+		{"all-caps-male", "пропуск: ИВАНОВ ИВАН ИВАНОВИЧ, стол 3", "ИВАНОВ ИВАН ИВАНОВИЧ"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -1820,11 +1827,13 @@ func TestFioRuFormats(t *testing.T) {
 		})
 	}
 
-	// No patronymic anchor -> no match: bare name pairs and arbitrary
-	// capitalized triples must pass through.
+	// No patronymic anchor -> no match: bare name pairs, arbitrary
+	// capitalized triples and ALL-CAPS headings must pass through.
 	assertNoMatch(t, scanner, "pii.fio-ru", "встреча с Анна Смирнова в офисе")
 	assertNoMatch(t, scanner, "pii.fio-ru", "Общество Ромашка Москва открыло филиал")
 	assertNoMatch(t, scanner, "pii.fio-ru", "Заявка На Пропуск оформлена")
+	assertNoMatch(t, scanner, "pii.fio-ru", "ООО РОГА И КОПЫТА открыло филиал")
+	assertNoMatch(t, scanner, "pii.fio-ru", "СРОЧНО ОФОРМИТЬ ПРОПУСК сегодня")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are
