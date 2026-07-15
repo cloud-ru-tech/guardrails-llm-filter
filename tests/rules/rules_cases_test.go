@@ -1970,6 +1970,9 @@ func TestAddressFormats(t *testing.T) {
 		{"marker-after-comma", "заказ на Ленинградский проспект, дом 45, квартира 12", "Ленинградский проспект, дом 45, квартира 12"},
 		{"apartment-anchor", "жду доставку Чехова 44 кв 78 вечером", "Чехова 44 кв 78"},
 		{"korpus-anchor", "адрес Московская 156 подъезд 2 тут", "Московская 156 подъезд 2"},
+		// New street-type markers алл./ш. — capitalised name required, like the rest.
+		{"alleya-marker", "жду алл. Черемуховая 49 сегодня", "алл. Черемуховая 49"},
+		{"shosse-abbrev-marker", "адрес ш. Энтузиастов 12 кв 3 приезжайте", "ш. Энтузиастов 12 кв 3"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -1981,6 +1984,15 @@ func TestAddressFormats(t *testing.T) {
 	// capitalized pair with no marker/suffix passes through.
 	assertNoMatch(t, scanner, "pii.docs.address", "артикул товара 789012 закончился")
 	assertNoMatch(t, scanner, "pii.docs.address", "поезд Москва Ростов прибыл")
+	// Precision guard: the street NAME must be capitalised. A lowercase relaxation
+	// (allow "наб. абрикосовая 66 кв. 5") was tried and reverted — abbreviated
+	// markers are omonyms of common words (пл.=площадь, пр.=прочее), so a lowercase
+	// name + apartment anchor fires on ordinary construction/legal prose. These
+	// regression guards come from an adversarial precision hunt.
+	assertNoMatch(t, scanner, "pii.docs.address", "доставка наб. абрикосовая 66 кв. 5 завтра")
+	assertNoMatch(t, scanner, "pii.docs.address", "Общая пл. кухни и коридора 18 кв. 6 в смете")
+	assertNoMatch(t, scanner, "pii.docs.address", "Мебель, техника и пр. позиции 7, офис 4 переданы")
+	assertNoMatch(t, scanner, "pii.docs.address", "по улице гуляли 2 часа подряд")
 }
 
 // TestCreditCardContextFormats locks in the keyword-gated no-Luhn card fallback:
