@@ -61,19 +61,6 @@ def load_hivetrace(n):
             rows.append((ex['text'], [(e['start'],e['end'],m[e['type']]) for e in ex['entities'] if e['type'] in m]))
     return rows[:n]
 
-def load_wolframko(n):
-    ds = load_dataset("wolframko/russian-pii-66k", split=f"train[:{n}]")
-    m = {'GIVENNAME':'NAME','SURNAME':'NAME','TELEPHONENUM':'PHONE','EMAIL':'EMAIL','SOCIALNUM':'SNILS',
-         'TAXNUM':'INN','IDCARDNUM':'PASSPORT','CITY':'ADDRESS','STREET':'ADDRESS','BUILDINGNUM':'ADDRESS','ZIPCODE':'ADDRESS',
-         'CREDITCARDNUMBER':'CARD','DATEOFBIRTH':'DOB','ACCOUNTNUM':'IBAN'}
-    rows=[]
-    for ex in ds:
-        pm = ex['privacy_mask']
-        if isinstance(pm, str): pm = ast.literal_eval(pm)
-        sp=[(e['start'],e['end'],m[e['label']]) for e in pm if e['label'] in m]
-        rows.append((ex['source_text'], sp))
-    return rows
-
 def load_alexen(n):
     ds = load_dataset("alexen2/pii-ner-ru-benchmark", split=f"test[:{n}]")
     m={'PER':'NAME','PHONE':'PHONE','EMAIL':'EMAIL'}
@@ -159,7 +146,6 @@ if __name__=='__main__':
     N=int(sys.argv[1]) if len(sys.argv)>1 else 2000
     res=[]
     res.append(evaluate("hivetrace/pii-bench", load_hivetrace(10**9)))
-    res.append(evaluate("wolframko/russian-pii-66k", load_wolframko(N)))
     res.append(evaluate("alexen2/pii-ner-ru-benchmark", load_alexen(10**9)))
     res.append(evaluate("alrosait/pii-synthetic-ru", load_alrosait(N)))
     print("\n\n=== СВОДКА (span-level) ===")
