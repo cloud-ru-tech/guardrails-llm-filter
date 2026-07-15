@@ -1607,6 +1607,12 @@ func realConfigRuleCases() []realConfigRuleCase {
 			wantFullText: "4111 1111 1111 1111",
 		},
 		{
+			name:         "pii.fin.credit-card.context",
+			ruleID:       "pii.fin.credit-card.context",
+			input:        "оплата по карте 4279 3811 5566 7788 вчера",
+			wantFullText: "4279 3811 5566 7788",
+		},
+		{
 			name:         "pii.fin.iban",
 			ruleID:       "pii.fin.iban",
 			input:        "beneficiary_iban = \"GB82 WEST 1234 5698 7654 32\"",
@@ -1975,6 +1981,38 @@ func TestAddressFormats(t *testing.T) {
 	// capitalized pair with no marker/suffix passes through.
 	assertNoMatch(t, scanner, "pii.docs.address", "артикул товара 789012 закончился")
 	assertNoMatch(t, scanner, "pii.docs.address", "поезд Москва Ростов прибыл")
+}
+
+// TestCreditCardContextFormats locks in the keyword-gated no-Luhn card fallback:
+// a card-shaped number NEAR a card keyword is masked even if its Luhn checksum
+// fails (typo / synthetic), while the keyword gate + brand-shape validator keep
+// precision — no keyword, or a non-card shape, means no match.
+func TestCreditCardContextFormats(t *testing.T) {
+	t.Parallel()
+	scanner, _ := loadRealConfigScanner(t)
+
+	for _, tt := range []struct{ name, input, match string }{
+		// Luhn-invalid but card-shaped, near a card keyword → masked.
+		{"mir-by-karte", "оплата по карте 2200 3456 7890 1234 прошла", "2200 3456 7890 1234"},
+		{"visa-by-card", "charged card 4279 3811 5566 7788 today", "4279 3811 5566 7788"},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertSingleMatch(t, scanner, "pii.fin.credit-card.context", tt.input, tt.match)
+		})
+	}
+	// No card keyword → the fallback stays silent (Luhn rule already rejects it).
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "перевод 2200 3456 7890 1234 выполнен")
+	// Keyword present but the number is not a valid card shape (13-digit OGRN-like)
+	// → brand-shape validator rejects it.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "карта 5123456789012 в реестре")
+	// Precision guards from an adversarial FP hunt:
+	// (1) omonym — a letter right after "карт..." (картЕЛЬ) means it is not a card word.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "Картель по делу 2200 1122 3344 5566 обсуждали")
+	// (2) a real card word but the card-shaped number is one WORD away (order/account
+	//     number), not adjacent → not a PAN.
+	assertNoMatch(t, scanner, "pii.fin.credit-card.context", "По карте заказ 4200123456789012 оформлен на доставку")
 }
 
 func TestKppCvcTokenFormats(t *testing.T) {

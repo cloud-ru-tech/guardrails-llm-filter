@@ -461,6 +461,29 @@ guardrails_regex_rules:
         masking:
           placeholder: "CREDIT_CARD"
 
+      - rule_id: pii.fin.credit-card.context
+        name: pii.fin.credit-card.context
+        # Keyword-gated fallback for the Luhn rule above: a card-shaped PAN of a
+        # valid brand/length that sits IMMEDIATELY after a card keyword
+        # (карта/карты/карте/карту/карточка/card/visa/…) — only separators between —
+        # is masked even when its Luhn checksum fails (typo'd / synthetic cards the
+        # strict rule would leak). Two precision guards, both learned from an
+        # adversarial FP hunt: (1) the keyword must be a WHOLE word — a letter right
+        # after it means an omonym (картЕЛЬ/картУз/картЕчь), no match; (2) only
+        # separators may sit between the keyword and the PAN, so "по карте ЗАКАЗ
+        # 4200…" / "card SERIAL 5100…" (a non-card number one word away) do NOT fire.
+        # The keyword is baked into the regex so the gate holds regardless of the
+        # keyword-prefilter flag; payment_card_no_luhn keeps brand+length precision.
+        # Residual ambiguity (accepted): a non-payment "карта" (медкарта, техкарта)
+        # directly followed by a 16-digit id is indistinguishable from a PAN and may
+        # be masked — rare and low-harm for a privacy gate. Group 1 (the PAN) is masked.
+        regex: '(?i)(?:карт[аеуы]|карточк[аеиуой]|card|visa|mastercard|maestro|маэстро)[\s:.,;№#()\-/]{1,4}((?:4|5[1-5]|2(?:2(?:2[1-9]|[3-9]\d)|[3-6]\d{2}|7(?:0\d|20))|3[47]|6011|64[4-9]|65|62|220[0-4])(?:[ -]?\d){11,17})'
+        min_length: 13
+        validators: [payment_card_no_luhn]
+        masking:
+          capture_groups: [1]
+          placeholder: "CREDIT_CARD"
+
       - rule_id: pii.fin.iban
         name: pii.fin.iban
         regex: '\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b'

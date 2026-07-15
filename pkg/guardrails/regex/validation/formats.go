@@ -58,9 +58,17 @@ func EmailASCIIValid(candidate string) bool {
 	return true
 }
 
-// PaymentCardValid validates a PAN shape already reduced to digits.
+// PaymentCardValid validates a PAN shape already reduced to digits, including
+// the Luhn checksum.
 func PaymentCardValid(digits string) bool {
-	if !allDigits(digits) || len(digits) < 13 || len(digits) > 19 || !LuhnValid(digits) {
+	return PaymentCardShape(digits) && LuhnValid(digits)
+}
+
+// PaymentCardShape validates a PAN brand and length WITHOUT the Luhn checksum.
+// Used by the keyword-gated card fallback to catch typo'd/synthetic cards that
+// carry a valid brand shape but a broken checksum.
+func PaymentCardShape(digits string) bool {
+	if !allDigits(digits) || len(digits) < 13 || len(digits) > 19 {
 		return false
 	}
 

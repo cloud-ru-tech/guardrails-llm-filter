@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expectedGenConfigRules  = 265
-	expectedRealConfigCases = 276
+	expectedGenConfigRules  = 266
+	expectedRealConfigCases = 277
 )
 
 type genConfigRuleCase struct {
@@ -371,6 +371,10 @@ func fixedValidatorCase(ruleID string) (input string, wantFullText string, ok bo
 		return "304500116000157", "304500116000157", true
 	case "pii.fin.credit-card":
 		return "4111 1111 1111 1111", "4111 1111 1111 1111", true
+	case "pii.fin.credit-card.context":
+		// Keyword-gated no-Luhn fallback: card word + a Luhn-invalid but
+		// brand-shaped PAN; group 1 (the PAN) is masked.
+		return "по карте 2200 3456 7890 1234 сегодня", "2200 3456 7890 1234", true
 	case "pii.fin.iban":
 		return "GB82 WEST 1234 5698 7654 32", "GB82 WEST 1234 5698 7654 32", true
 	default:

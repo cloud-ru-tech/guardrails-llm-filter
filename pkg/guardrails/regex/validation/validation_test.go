@@ -494,6 +494,39 @@ func TestPaymentCardValid(t *testing.T) {
 	}
 }
 
+// TestPaymentCardShape covers the brand+length check WITHOUT the Luhn gate: it
+// accepts a card-shaped PAN even when the checksum is wrong (typo / synthetic),
+// but still rejects wrong brand-lengths and non-card numbers.
+func TestPaymentCardShape(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		digits string
+		want   bool
+	}{
+		{name: "visa 16 bad luhn", digits: "4279381155667788", want: true},
+		{name: "mir 2200 bad luhn", digits: "2200345678901234", want: true},
+		{name: "mastercard 51 bad luhn", digits: "5123456789012349", want: true},
+		{name: "amex 15 bad luhn", digits: "341234567890123", want: true},
+		{name: "valid luhn still ok", digits: "4111111111111111", want: true},
+		{name: "ogrn-like 13 digits", digits: "5123456789012", want: false},
+		{name: "visa wrong length 15", digits: "417500000000000", want: false},
+		{name: "unknown prefix", digits: "9912345678901234", want: false},
+		{name: "too short", digits: "411111111111", want: false},
+		{name: "non digit", digits: "411111111111111x", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, PaymentCardShape(tt.digits))
+		})
+	}
+}
+
 func TestIPValidationHelpersViaValidate(t *testing.T) {
 	t.Parallel()
 
