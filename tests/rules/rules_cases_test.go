@@ -1893,6 +1893,10 @@ func TestFioShortFormats(t *testing.T) {
 		{"male-declined", "документы у Ивана Кузнецова остались", "Ивана Кузнецова"},
 		{"yo-name", "дежурит Пётр Николаев сегодня", "Пётр Николаев"},
 		{"non-suffix-surname", "менеджер Мария Жук ответила", "Мария Жук"},
+		{"adjectival-surname-first", "сотрудник Белая Мария на месте", "Белая Мария"},
+		{"adjectival-surname-decl", "заявитель Достоевская Анна пришла", "Достоевская Анна"},
+		{"ko-surname", "звонил Иван Шевченко вчера", "Иван Шевченко"},
+		{"name-patronymic", "Здравствуйте, Анна Сергеевна, проходите", "Анна Сергеевна"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -1901,10 +1905,13 @@ func TestFioShortFormats(t *testing.T) {
 		})
 	}
 
-	// Capitalized pairs without a dictionary-name anchor stay untouched.
+	// Capitalized pairs without a dictionary-name anchor stay untouched —
+	// including adjective-first phrases whose second word is not a name.
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "поезд Москва Ростов отправился")
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "Красная Площадь закрыта сегодня")
 	assertNoMatch(t, scanner, "pii.fio-ru.short", "Совет Федерации собрался")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "парад Красная Армия провела")
+	assertNoMatch(t, scanner, "pii.fio-ru.short", "Ясная Поляна закрыта сегодня")
 }
 
 // TestPhoneFormats locks in the RU phone boundary behaviour: real spellings are
