@@ -213,6 +213,33 @@ gitleaks; маскируются и **аргументы tool-call**; fail-open 
 инфраструктура в AWS Bedrock — Guardrails ближе всего. Нужны диалоговые рельсы и
 защита от джейлбрейков, а не маскирование — NeMo Guardrails решает другую задачу.
 
+### Качество на бенчмарках
+
+Детекция здесь — regex + валидаторы, но на публичном датасете
+[`hivetrace/pii-bench`](https://huggingface.co/datasets/hivetrace/pii-bench)
+(1810 примеров, 13 типов ПДн) она **конкурентна с ML**: span-level F1 93.1 при
+precision 99.9% — выше, чем у полного pipeline GLiNER Guard (модель + regex, 84.4).
+Сырые ML-модели проваливаются на структурированном PII (ИНН/ОГРН/КПП/карта) и
+добирают до рабочих цифр **теми же regex-правилами**. Разбор по всем типам,
+методика и источники — в [MULTIBENCH.md](tests/benchmarks/pii_recall/MULTIBENCH.md).
+
+| Модель | Датасет | F1 | recall | precision |
+|---|:--:|:--:|:--:|:--:|
+| **guardrails (наш)** | hivetrace/pii-bench | **93.1** | 87.2 | 99.9 |
+| **guardrails (наш)** | alexen2 | **89.8** | 82.2 | 98.9 |
+| **guardrails (наш)** | alrosait | **82.9** | 75.1 | 92.4 |
+| GLiGuard pipeline (модель+regex)[^b] | hivetrace/pii-bench | 84.4 | — | — |
+| GLiGuard Omni raw[^b] | hivetrace/pii-bench | 72.8 | — | — |
+| GLiNER2-Multi raw[^b] | hivetrace/pii-bench | 68.8 | — | — |
+| GLiGuard uni raw[^b] | hivetrace/pii-bench | 24.2 | — | — |
+
+<sub>F1 моделей — из статьи GLiNER Guard ([arXiv 2605.05277](https://arxiv.org/abs/2605.05277));
+авторы публикуют только F1, поэтому recall/precision — «—». Сторонних замеров на
+alexen2/alrosait нет.</sub>
+
+[^b]: GLiNER Guard / GLiNER2 — энкодеры для zero-shot PII/NER; «raw» = только модель,
+    «pipeline» = модель + детерминированные regex-правила (их же production-режим).
+
 ## Конфигурация
 
 Все переменные с префиксом `GUARDRAILS_`. Обычно достаточно нескольких:
