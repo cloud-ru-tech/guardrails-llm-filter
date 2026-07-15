@@ -93,7 +93,7 @@ func TestMaskerMaskText(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := newMasker()
+			m := newMasker(nil)
 
 			got := m.maskText(tt.text, tt.matches)
 
@@ -105,7 +105,7 @@ func TestMaskerMaskText(t *testing.T) {
 func TestMaskerStateAcrossCalls(t *testing.T) {
 	t.Parallel()
 
-	m := newMasker()
+	m := newMasker(nil)
 
 	gotFirst := m.maskText("secret and api", []sensitive.Match{
 		maskerMatch("credentials.secret", models.DataTypeCREDENTIALS, "secret and api", "secret", "SECRET"),
@@ -150,7 +150,7 @@ func TestMaskerStateAcrossCalls(t *testing.T) {
 func TestMaskerTriggeredDataTypesFiltersInvalidValues(t *testing.T) {
 	t.Parallel()
 
-	m := newMasker()
+	m := newMasker(nil)
 
 	got := m.maskText("a b c", []sensitive.Match{
 		{
@@ -186,7 +186,7 @@ func TestMaskerTriggeredDataTypesFiltersInvalidValues(t *testing.T) {
 func TestMaskerPlaceholderHelpers(t *testing.T) {
 	t.Parallel()
 
-	m := newMasker()
+	m := newMasker(nil)
 
 	placeholder, created := m.placeholderForOriginal("secret", "SECRET")
 	require.True(t, created)

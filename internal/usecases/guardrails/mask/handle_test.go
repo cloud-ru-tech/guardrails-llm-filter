@@ -336,6 +336,38 @@ func loadRealRegistry(tb testing.TB) *registry.Registry {
 	return reg
 }
 
+// TestUseCase_Handle_AvoidsPlaceholderCollision guards the demask round-trip
+// against a user text that already contains a literal <TYPE_N> matching the
+// placeholder the masker would generate. The masker must skip that counter value
+// so the literal survives unchanged (demask replaces only genuinely-generated
+// placeholders).
+func TestUseCase_Handle_AvoidsPlaceholderCollision(t *testing.T) {
+	t.Parallel()
+
+	reg := loadRealRegistry(t)
+	uc := mask.New(mask.Deps{Registry: reg, Scanner: sensitive.New(reg)})
+
+	resp, err := uc.Handle(context.Background(), mask.Command{
+		DataTypes: []models.DataType{models.DataTypePERSONALDATA},
+		Texts:     []string{"есть <FIO_1> и звонил Иванов Иван Петрович"},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.MaskedTexts, 1)
+
+	// The name must NOT reuse <FIO_1> (the literal already in the text); it takes
+	// the next free counter value, leaving the literal intact.
+	assert.Equal(t, "есть <FIO_1> и звонил <FIO_2>", resp.MaskedTexts[0])
+
+	var namePlaceholder string
+	for _, r := range resp.MaskingState.Replacements {
+		if r.Original == "Иванов Иван Петрович" {
+			namePlaceholder = r.Placeholder
+		}
+	}
+	assert.Equal(t, "<FIO_2>", namePlaceholder,
+		"placeholder must skip the literal <FIO_1> present in the input")
+}
+
 // TestUseCase_Handle_ParallelEqualsSequential verifies that the parallel scan
 // path produces byte-for-byte identical results to the sequential path, across
 // bodies below and above the size threshold. Combined with `go test -race`, this
