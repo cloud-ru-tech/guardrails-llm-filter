@@ -324,9 +324,10 @@ func (e *App) Gateway() *gateway.Handler {
 	if err != nil {
 		panic(fmt.Errorf("create gateway handler: %w", err))
 	}
-	if e.cfg.Upstream.BaseURL == "" && len(e.cfg.Upstream.PathBaseURLs) == 0 {
-		panic(fmt.Errorf("no upstream configured: set GUARDRAILS_UPSTREAM_BASE_URL (or GUARDRAILS_UPSTREAM_PATH_BASE_URLS)"))
-	}
+		if e.cfg.Upstream.BaseURL == "" && len(e.cfg.Upstream.PathBaseURLs) == 0 {
+			logging.Info(context.Background(), "No upstream configured — gateway (data-plane proxy) disabled. Management API + scan endpoint remain active.")
+			return nil
+		}
 	e.gateway = gw
 	return e.gateway
 }
@@ -338,10 +339,14 @@ func (e *App) GatewayServer() *http.Server {
 	if e.gatewayServer != nil {
 		return e.gatewayServer
 	}
+	gw := e.Gateway()
+	if gw == nil {
+		return nil
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", livenessHandler)
 	mux.HandleFunc("GET /readyz", readinessHandler)
-	mux.Handle("/", e.Gateway())
+	mux.Handle("/", gw)
 	e.gatewayServer = &http.Server{
 		Addr:              e.cfg.ListenAddr,
 		Handler:           mux,
@@ -383,13 +388,16 @@ func (e *App) Start(ctx context.Context) error {
 			"retention", e.cfg.Audit.Retention.String())
 	}
 
-	gatewaySrv := e.GatewayServer()
-	go func() {
-		logging.Info(ctx, "Starting gateway server", "addr", gatewaySrv.Addr, "upstream", e.cfg.Upstream.BaseURL)
-		if err := gatewaySrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logging.Error(ctx, "gateway server error", err)
+		if gatewaySrv := e.GatewayServer(); gatewaySrv != nil {
+			go func() {
+				logging.Info(ctx, "Starting gateway server", "addr", gatewaySrv.Addr, "upstream", e.cfg.Upstream.BaseURL)
+				if err := gatewaySrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					logging.Error(ctx, "gateway server error", err)
+				}
+			}()
+		} else {
+			logging.Info(ctx, "Gateway server skipped (no upstream configured) — management API + scan endpoint are active")
 		}
-	}()
 
 	go func() {
 		logging.Info(ctx, "Starting metrics server", "port", e.cfg.MetricsPort)
