@@ -39,6 +39,40 @@ func TestExtractRequestContent(t *testing.T) {
 		assert.Equal(t, []string{"system", "messages.0.content"}, paths(fields))
 	})
 
+	t.Run("tool definitions are extracted ahead of system and messages", func(t *testing.T) {
+		// A tool definition is prompt text: description and schema text keywords
+		// reach the model on every turn. It is extracted first, mirroring its
+		// position at the head of the prompt, so its placeholder numbers stay
+		// stable as the conversation grows.
+		body := []byte(`{"system":"sys","messages":[{"role":"user","content":"hi"}],` +
+			`"tools":[{"name":"notify","description":"Notify a@b.com",` +
+			`"input_schema":{"type":"object","properties":{` +
+			`"to":{"type":"string","default":"a@b.com"}},"required":["to"]}}]}`)
+		fields, err := ExtractRequestContent(body)
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"tools.0.description",
+			"tools.0.input_schema.properties.to.default",
+			"system",
+			"messages.0.content",
+		}, paths(fields))
+		v, ok := valueAt(fields, "tools.0.description")
+		require.True(t, ok)
+		assert.Equal(t, "Notify a@b.com", v)
+	})
+
+	t.Run("server-side tool: only prose is extracted", func(t *testing.T) {
+		// user_location is consumed by the provider to run the search; masking it
+		// would break the tool. The tool name is skipped for the same reason
+		// (the model echoes it back in tool_use.name, which is not demasked).
+		body := []byte(`{"messages":[{"role":"user","content":"find"}],` +
+			`"tools":[{"type":"web_search_20250305","name":"web_search",` +
+			`"user_location":{"type":"approximate","city":"Berlin"}}]}`)
+		fields, err := ExtractRequestContent(body)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"messages.0.content"}, paths(fields))
+	})
+
 	t.Run("system block array is extracted", func(t *testing.T) {
 		body := []byte(`{"system":[{"type":"text","text":"first"},{"type":"text","text":"second"}],` +
 			`"messages":[]}`)

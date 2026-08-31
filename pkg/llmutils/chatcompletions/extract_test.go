@@ -132,6 +132,60 @@ func TestExtractRequestContent(t *testing.T) {
 			wantError: llmutils.ErrUnsupportedBodySchema,
 		},
 		{
+			name: "chat extracts tool definitions before messages",
+			// A tool definition is prompt text the model reads on every turn.
+			// Extracting it first keeps its placeholder numbers independent of
+			// the conversation length.
+			body: `{
+				"messages":[{"role":"user","content":"user secret"}],
+				"tools":[
+					{
+						"type":"function",
+						"function":{
+							"name":"notify",
+							"description":"Notify a@b.com",
+							"parameters":{
+								"type":"object",
+								"properties":{
+									"to":{"type":"string","default":"a@b.com","description":"recipient"}
+								},
+								"required":["to"]
+							}
+						}
+					}
+				]
+			}`,
+			want: []llmutils.ContentField{
+				{Path: "tools.0.function.description", Value: "Notify a@b.com"},
+				{Path: "tools.0.function.parameters.properties.to.default", Value: "a@b.com"},
+				{Path: "tools.0.function.parameters.properties.to.description", Value: "recipient"},
+				{Path: "messages.0.content", Value: "user secret"},
+			},
+		},
+		{
+			name: "chat extracts legacy top-level function definitions",
+			body: `{
+				"messages":[{"role":"user","content":"hi"}],
+				"functions":[{"name":"notify","description":"Notify a@b.com"}]
+			}`,
+			want: []llmutils.ContentField{
+				{Path: "functions.0.description", Value: "Notify a@b.com"},
+				{Path: "messages.0.content", Value: "hi"},
+			},
+		},
+		{
+			name: "chat never extracts a tool name",
+			// The model echoes the name back in tool_calls[].function.name, which
+			// is not demasked — masking it would break tool calling.
+			body: `{
+				"messages":[{"role":"user","content":"hi"}],
+				"tools":[{"type":"function","function":{"name":"a@b.com"}}]
+			}`,
+			want: []llmutils.ContentField{
+				{Path: "messages.0.content", Value: "hi"},
+			},
+		},
+		{
 			name: "no extractable fields returns nil",
 			body: `{
 				"messages":[
