@@ -46,6 +46,7 @@ env-дефолтах (кастомные правила — только фай�
 | `GUARDRAILS_LISTEN_ADDR` | `:8080` | data-plane HTTP-адрес (сюда обращаются клиенты) |
 | `GUARDRAILS_MAX_REQUEST_BYTES` | `33554432` (32 MiB) | лимит тела запроса, читаемого в память до маскирования; превышение → 413; `0` отключает лимит |
 | `GUARDRAILS_METRICS_PORT` | `9090` | порт метрик Prometheus |
+| `GUARDRAILS_METRICS_SUMMARY_SOURCE` | `auto` | источник lifetime-счётчиков для `GET /v1/metrics/summary`: `auto` (общий стор при `redis`/`postgres`, иначе локальный gatherer), `store`, `local`; латентностные перцентили всегда per-replica (см. [docs/monitoring](../monitoring/README.md)) |
 | `GUARDRAILS_GRPC_ADDR` | `:9000` | management gRPC-адрес (`GuardrailsApi`); REST-API проксирует на него |
 | `GUARDRAILS_GRPC_SECURE` | `false` | self-signed TLS на management gRPC-listener (`pkg/tlsutils`); по умолчанию выкл — API рассчитан на работу внутри кластера |
 | `GUARDRAILS_UPSTREAM_BASE_URL` | — | базовый URL upstream LLM-провайдера; путь запроса дописывается к нему. **Обязателен**, если не задан `PATH_BASE_URLS` (без обоих — отказ старта). Валидируется на старте: абсолютный http(s)-URL с хостом (как и значения `PATH_BASE_URLS`) |

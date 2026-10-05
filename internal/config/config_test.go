@@ -161,3 +161,26 @@ func TestLoadUpstreamInvalidPathOverrideFailsBoot(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GUARDRAILS_UPSTREAM_PATH_BASE_URLS")
 }
+
+func TestLoadMetricsSummarySource(t *testing.T) {
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, config.MetricsSummaryAuto, cfg.Metrics.SummarySource)
+
+	for _, src := range []string{config.MetricsSummaryStore, config.MetricsSummaryLocal} {
+		t.Setenv("GUARDRAILS_METRICS_SUMMARY_SOURCE", src)
+		cfg, err = config.Load()
+		require.NoError(t, err)
+		assert.Equal(t, src, cfg.Metrics.SummarySource)
+	}
+}
+
+func TestBadSummarySrc(t *testing.T) {
+	// A typo must fail boot: silently defaulting to "auto" is exactly the
+	// multi-replica misconfiguration the operator was trying to pin down.
+	t.Setenv("GUARDRAILS_METRICS_SUMMARY_SOURCE", "redis")
+
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GUARDRAILS_METRICS_SUMMARY_SOURCE")
+}

@@ -1,10 +1,13 @@
 package metrics
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/repository"
 )
 
 const namespace = "extproc_guardrails"
@@ -12,6 +15,34 @@ const namespace = "extproc_guardrails"
 const (
 	modeFull = "full"
 	modeSSE  = "sse"
+)
+
+// Passthrough labels of the passthrough counter family. They are shared by the
+// local mirror below and by /v1/metrics/summary, which reports the same three
+// series, so the two can never drift apart.
+const (
+	PassthroughUnknownFormat     = "unknown_format"
+	PassthroughUnguardedPath     = "unguarded_path"
+	PassthroughUnsupportedSchema = "unsupported_schema"
+)
+
+// maxPendingCounterSeries bounds the pending distributed-counter map. Series are
+// (kind, label) pairs drawn from a bounded set — four families, at most
+// GUARDRAILS_RULES_MAX_CUSTOM rule IDs, a fixed data-type list — so the cap is
+// a backstop against a misbehaving caller, not a routine limit. Hitting it
+// drops the new series (metered) instead of growing without bound.
+const maxPendingCounterSeries = 10000
+
+// CounterKey identifies one distributed counter series: a family plus its label
+// value.
+type CounterKey struct {
+	Kind  repository.CounterKind
+	Label string
+}
+
+var (
+	pendingCountersMu sync.Mutex
+	pendingCounters   = make(map[CounterKey]int64)
 )
 
 var (
@@ -204,7 +235,59 @@ var (
 			Help:      "Total number of requests on a guarded path whose body schema the resolved API format could not extract, so they passed through unmasked (fail-open). A non-zero rate usually means a path is mapped to the wrong format in GUARDRAILS_PATHS (e.g. legacy /v1/completions, which is unsupported).",
 		},
 	)
+
+	counterMirrorDropped = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "counter_mirror_dropped_total",
+			Help:      "Total number of distributed-counter series dropped because the pending buffer was full. Non-zero means the shared store is unreachable or far slower than the traffic.",
+		},
+	)
 )
+
+// mirrorIncr queues one increment for the shared-store counters. It is the only
+// thing the hot path pays for the distributed summary: an in-process map update,
+// no store round trip. internal/service/counters drains the queue on an interval.
+func mirrorIncr(kind repository.CounterKind, label string) {
+	key := CounterKey{Kind: kind, Label: label}
+
+	pendingCountersMu.Lock()
+	defer pendingCountersMu.Unlock()
+	if _, queued := pendingCounters[key]; !queued && len(pendingCounters) >= maxPendingCounterSeries {
+		counterMirrorDropped.Inc()
+		return
+	}
+	pendingCounters[key]++
+}
+
+// TakePendingCounters atomically swaps out and returns the counter deltas
+// queued since the previous call, or nil when nothing is pending. The caller
+// owns the result and must account for it: on a failed store write it should
+// hand the deltas back with RestorePendingCounters rather than drop them.
+func TakePendingCounters() map[CounterKey]int64 {
+	pendingCountersMu.Lock()
+	defer pendingCountersMu.Unlock()
+	if len(pendingCounters) == 0 {
+		return nil
+	}
+	taken := pendingCounters
+	pendingCounters = make(map[CounterKey]int64)
+	return taken
+}
+
+// RestorePendingCounters merges deltas from a failed flush back into the pending
+// queue. Series that no longer fit the cap are dropped (metered).
+func RestorePendingCounters(deltas map[CounterKey]int64) {
+	pendingCountersMu.Lock()
+	defer pendingCountersMu.Unlock()
+	for key, delta := range deltas {
+		if _, queued := pendingCounters[key]; !queued && len(pendingCounters) >= maxPendingCounterSeries {
+			counterMirrorDropped.Inc()
+			continue
+		}
+		pendingCounters[key] += delta
+	}
+}
 
 // ObservePipelineDuration records total guardrails pipeline duration.
 func ObservePipelineDuration(duration time.Duration) {
@@ -264,11 +347,13 @@ func ObserveTriggeredRules(count int) {
 // IncRuleTrigger records one request-level trigger for a rule.
 func IncRuleTrigger(ruleID string) {
 	ruleTriggers.With(prometheus.Labels{"rule_id": ruleID}).Inc()
+	mirrorIncr(repository.CounterRuleTriggers, ruleID)
 }
 
 // IncDataTypeTrigger records one request-level trigger for a data type.
 func IncDataTypeTrigger(dataType string) {
 	dataTypeTriggers.With(prometheus.Labels{"data_type": dataType}).Inc()
+	mirrorIncr(repository.CounterDataTypeTriggers, dataType)
 }
 
 // IncMaskFailed records a request masking failure.
@@ -300,6 +385,7 @@ func IncMaskingStateStoreFailure(op string) {
 // value (enforce) or would have (detect). mode is "enforce" or "detect".
 func IncRequestMasked(mode string) {
 	requestsMasked.With(prometheus.Labels{"mode": mode}).Inc()
+	mirrorIncr(repository.CounterRequestsMasked, mode)
 }
 
 // IncAuditStoreFailure records an audit store error by operation (put|get|list).
@@ -311,18 +397,21 @@ func IncAuditStoreFailure(op string) {
 // because its API format was unknown (fail-open).
 func IncUnknownFormatPassthrough() {
 	unknownFormatPassthrough.Inc()
+	mirrorIncr(repository.CounterPassthrough, PassthroughUnknownFormat)
 }
 
 // IncUnguardedPathPassthrough records a request passed through unmasked
 // because its path matched no guarded LLM path.
 func IncUnguardedPathPassthrough() {
 	unguardedPathPassthrough.Inc()
+	mirrorIncr(repository.CounterPassthrough, PassthroughUnguardedPath)
 }
 
 // IncUnsupportedBodySchema records a request on a guarded path whose body the
 // resolved API format could not extract, so it passed through unmasked.
 func IncUnsupportedBodySchema() {
 	unsupportedBodySchema.Inc()
+	mirrorIncr(repository.CounterPassthrough, PassthroughUnsupportedSchema)
 }
 
 // IncAuditDropped records an audit record dropped due to write-queue saturation.

@@ -171,12 +171,68 @@ type AuditStore interface {
 	SetAuditResponseTexts(ctx context.Context, requestID string, texts []string) error
 }
 
+// CounterKind identifies a monotonic masking counter family mirrored into the
+// shared store. The set is closed: /v1/metrics/summary aggregates exactly
+// these families.
+type CounterKind string
+
+const (
+	// CounterRequestsMasked counts requests where at least one value was
+	// masked (enforce) or would have been (detect). Label: mode.
+	CounterRequestsMasked CounterKind = "requests_masked"
+	// CounterRuleTriggers counts request-level rule triggers. Label: rule_id.
+	CounterRuleTriggers CounterKind = "rule_triggers"
+	// CounterDataTypeTriggers counts request-level data-type triggers. Label:
+	// data_type.
+	CounterDataTypeTriggers CounterKind = "data_type_triggers"
+	// CounterPassthrough counts fail-open passthroughs. Label: kind
+	// (unknown_format | unguarded_path | unsupported_schema).
+	CounterPassthrough CounterKind = "passthrough"
+)
+
+// CounterKinds lists every family a CounterStore must accept, in a stable order.
+var CounterKinds = []CounterKind{
+	CounterRequestsMasked,
+	CounterRuleTriggers,
+	CounterDataTypeTriggers,
+	CounterPassthrough,
+}
+
+// Counters is a snapshot of the distributed masking counters as
+// kind → label → lifetime count.
+type Counters map[CounterKind]map[string]int64
+
+// CounterStore persists lifetime masking counters in the shared store so
+// /v1/metrics/summary reports the same numbers on every replica. It exists
+// because the Prometheus counters behind that endpoint are per-process: on a
+// multi-replica deployment each pod would otherwise report only its own slice.
+//
+// Contract:
+//   - Counters are monotonic and carry no TTL. Unlike audit records they are
+//     never rotated, which is what makes a lifetime reading meaningful (an
+//     audit-window aggregate is neither monotonic nor replica-independent).
+//   - IncrCounters applies a whole batch. Concurrent increments of the same
+//     series from different replicas must not lose updates (Redis HINCRBY,
+//     Postgres ON CONFLICT DO UPDATE).
+//   - Only the closed CounterKinds set is ever stored. A zero delta is a no-op
+//     and an unrecognized kind is ignored, so all backends agree on which
+//     series exist and a typo cannot grow the key space unboundedly.
+//   - Counters carry no PII — labels are mode, rule_id, data_type or a fixed
+//     passthrough kind — so they are stored in the clear even when store
+//     encryption is enabled.
+//   - An absent family reads as empty, never as an error.
+type CounterStore interface {
+	IncrCounters(ctx context.Context, deltas Counters) error
+	ReadCounters(ctx context.Context) (Counters, error)
+}
+
 // Store is the full persistence backend.
 type Store interface {
 	MaskingStateStore
 	RuleStore
 	SettingsStore
 	AuditStore
+	CounterStore
 
 	Ping(ctx context.Context) error
 	Close() error

@@ -40,6 +40,7 @@ type Store struct {
 	mu            sync.RWMutex
 	masking       map[string]maskEntry
 	audit         map[string]auditEntry
+	counters      map[repository.CounterKind]map[string]int64
 	rules         map[string]rule.Rule
 	disabledRules map[string]struct{}
 	settings      *models.GuardrailsSettings
@@ -62,6 +63,7 @@ func New(maskingTTL, auditTTL time.Duration, auditMaxEntries int) *Store {
 		audit:           make(map[string]auditEntry),
 		rules:           make(map[string]rule.Rule),
 		disabledRules:   make(map[string]struct{}),
+		counters:        make(map[repository.CounterKind]map[string]int64),
 		stopJanitor:     make(chan struct{}),
 		janitorDone:     make(chan struct{}),
 	}
@@ -309,6 +311,42 @@ func (s *Store) SaveSettingsIfAbsent(_ context.Context, gs models.GuardrailsSett
 	gs.DataTypes = slices.Clone(gs.DataTypes)
 	s.settings = &gs
 	return true, nil
+}
+
+// IncrCounters adds the batch to the in-process totals. As in the external
+// backends only the closed repository.CounterKinds set is stored and zero deltas
+// are no-ops, so every backend agrees on which series exist.
+func (s *Store) IncrCounters(_ context.Context, deltas repository.Counters) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, kind := range repository.CounterKinds {
+		for label, delta := range deltas[kind] {
+			if delta == 0 {
+				continue
+			}
+			if s.counters[kind] == nil {
+				s.counters[kind] = make(map[string]int64)
+			}
+			s.counters[kind][label] += delta
+		}
+	}
+	return nil
+}
+
+func (s *Store) ReadCounters(_ context.Context) (repository.Counters, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(repository.Counters, len(repository.CounterKinds))
+	for _, kind := range repository.CounterKinds {
+		series := s.counters[kind]
+		if len(series) == 0 {
+			continue
+		}
+		cp := make(map[string]int64, len(series))
+		maps.Copy(cp, series)
+		out[kind] = cp
+	}
+	return out, nil
 }
 
 func (s *Store) Ping(_ context.Context) error { return nil }

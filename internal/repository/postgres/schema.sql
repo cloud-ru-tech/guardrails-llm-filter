@@ -53,3 +53,15 @@ CREATE INDEX IF NOT EXISTS guardrails_audit_expires_idx
     ON guardrails_audit (expires_at);
 CREATE INDEX IF NOT EXISTS guardrails_audit_rules_idx
     ON guardrails_audit USING GIN (rule_ids);
+
+-- Lifetime masking counters, aggregated across replicas by
+-- /v1/metrics/summary. Deliberately has no TTL and is never reset: an audit
+-- window is neither monotonic nor replica-independent, so it cannot stand in
+-- for these. Labels are mode / rule_id / data_type / a fixed kind, so the rows
+-- carry no PII and stay in the clear even when store encryption is on.
+CREATE TABLE IF NOT EXISTS guardrails_counters (
+    kind  TEXT   NOT NULL,
+    label TEXT   NOT NULL,
+    value BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (kind, label)
+);

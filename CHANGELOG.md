@@ -41,6 +41,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   operator's signal that the gateway receives traffic on paths beyond
   `GUARDRAILS_PATHS`.
 
+- Distributed masking counters (`GUARDRAILS_METRICS_SUMMARY_SOURCE`, default
+  `auto`): on a `redis`/`postgres` store the monotonic families behind
+  `GET /v1/metrics/summary` — `requests_masked_total`, `rule_triggers_total`,
+  `data_type_triggers_total`, `passthrough_total` — are now mirrored into the
+  shared store and read back, so the in-app console shows the same lifetime
+  numbers on every replica instead of only the pod that served the request.
+  Increments stay in process and are flushed as one batched write every 5s, so
+  the data path gains no store round-trip; a failed flush is retried, and the
+  endpoint falls back to the per-replica gatherer if the store cannot be read.
+  Latency percentiles remain per-replica (`/metrics` stays the canonical
+  multi-replica source for them). Redis uses `guardrails:counters:<family>`
+  hashes; Postgres adds a `guardrails_counters` table. Existing lifetime
+  counters start at zero in the store on first deploy, so the console hero
+  number resets once.
+
 ### Changed
 
 - The data path is now standalone HTTP instead of an Envoy `ext_proc` gRPC

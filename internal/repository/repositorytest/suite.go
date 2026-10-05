@@ -553,6 +553,84 @@ func Run(t *testing.T, newStore func(t *testing.T) repository.Store, opts Option
 		})
 	}
 
+	t.Run("counters accumulate per series", func(t *testing.T) {
+		s := newStore(t)
+
+		require.NoError(t, s.IncrCounters(ctx, repository.Counters{
+			repository.CounterRequestsMasked: {"enforce": 3},
+			repository.CounterRuleTriggers:   {"pii.email": 2, "pii.phone_ru": 1},
+		}))
+		// A second, overlapping batch must add to the stored totals rather than
+		// replace them — this is what makes concurrent replicas correct.
+		require.NoError(t, s.IncrCounters(ctx, repository.Counters{
+			repository.CounterRequestsMasked: {"enforce": 4, "detect": 1},
+			repository.CounterRuleTriggers:   {"pii.email": 5},
+			repository.CounterPassthrough:    {metricsUnguarded: 1},
+		}))
+
+		got, err := s.ReadCounters(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(7), got[repository.CounterRequestsMasked]["enforce"])
+		assert.Equal(t, int64(1), got[repository.CounterRequestsMasked]["detect"])
+		assert.Equal(t, int64(7), got[repository.CounterRuleTriggers]["pii.email"])
+		assert.Equal(t, int64(1), got[repository.CounterRuleTriggers]["pii.phone_ru"])
+		assert.Equal(t, int64(1), got[repository.CounterPassthrough][metricsUnguarded])
+		// A family that was never written is absent, not an error.
+		assert.Empty(t, got[repository.CounterDataTypeTriggers])
+	})
+
+	t.Run("counters read as empty when never written", func(t *testing.T) {
+		s := newStore(t)
+		got, err := s.ReadCounters(ctx)
+		require.NoError(t, err)
+		assert.Empty(t, got[repository.CounterRequestsMasked])
+	})
+
+	t.Run("counters ignore zero and unknown families", func(t *testing.T) {
+		s := newStore(t)
+		// A zero delta is a no-op; an unknown family must not materialize a
+		// series that ReadCounters would never return.
+		require.NoError(t, s.IncrCounters(ctx, repository.Counters{
+			repository.CounterRequestsMasked:       {"enforce": 0},
+			repository.CounterKind("not-a-family"): {"x": 5},
+		}))
+
+		got, err := s.ReadCounters(ctx)
+		require.NoError(t, err)
+		assert.Empty(t, got[repository.CounterRequestsMasked])
+		assert.Empty(t, got[repository.CounterKind("not-a-family")])
+	})
+
+	t.Run("counters are concurrent-safe", func(t *testing.T) {
+		s := newStore(t)
+		const workers, perWorker = 8, 25
+		errs := make(chan error, workers)
+		var wg sync.WaitGroup
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for range perWorker {
+					if err := s.IncrCounters(ctx, repository.Counters{
+						repository.CounterRequestsMasked: {"enforce": 1},
+					}); err != nil {
+						errs <- err
+						return
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			require.NoError(t, err)
+		}
+
+		got, err := s.ReadCounters(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(workers*perWorker), got[repository.CounterRequestsMasked]["enforce"])
+	})
+
 	t.Run("ping", func(t *testing.T) {
 		s := newStore(t)
 		ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -560,3 +638,8 @@ func Run(t *testing.T, newStore func(t *testing.T) repository.Store, opts Option
 		require.NoError(t, s.Ping(ctxTimeout))
 	})
 }
+
+// metricsUnguarded mirrors the metrics.PassthroughUnguardedPath label without
+// importing internal/metrics (which would pull the Prometheus registry into
+// every backend test binary).
+const metricsUnguarded = "unguarded_path"

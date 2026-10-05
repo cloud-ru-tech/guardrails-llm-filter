@@ -25,6 +25,7 @@ import (
 	storeredis "github.com/cloud-ru-tech/guardrails-llm-filter/internal/repository/redis"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/repository/statecodec"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/service/audit"
+	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/service/counters"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/service/rulesreload"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/service/settings"
 	maskuc "github.com/cloud-ru-tech/guardrails-llm-filter/internal/usecases/guardrails/mask"
@@ -58,6 +59,7 @@ type App struct {
 
 	store              repository.Store
 	codec              statecodec.Codec
+	countersMirror     *counters.Mirror
 	settingsService    *settings.Service
 	rulesUC            *rulesuc.UseCase
 	builtinsIndex      *builtins.Index
@@ -126,6 +128,39 @@ func (e *App) storeCodec() statecodec.Codec {
 		e.codec = statecodec.Plain()
 	}
 	return e.codec
+}
+
+// countersUseStore reports whether GET /v1/metrics/summary should read the
+// distributed counters — and therefore whether the mirror has to run. Under
+// "auto" the answer follows the backend: only redis and postgres share state
+// across replicas, so only they can produce a deployment-wide total.
+func (e *App) countersUseStore() bool {
+	switch e.cfg.Metrics.SummarySource {
+	case config.MetricsSummaryLocal:
+		return false
+	case config.MetricsSummaryStore:
+		return true
+	default: // auto
+		switch storefactory.Backend(e.cfg.Store.Backend) {
+		case storefactory.BackendRedis, storefactory.BackendPostgres:
+			return true
+		default:
+			return false
+		}
+	}
+}
+
+// CountersMirror returns the shared-store counter mirror, or nil when the
+// summary is served from the local Prometheus gatherer.
+func (e *App) CountersMirror() *counters.Mirror {
+	if e.countersMirror != nil {
+		return e.countersMirror
+	}
+	if !e.countersUseStore() {
+		return nil
+	}
+	e.countersMirror = counters.New(e.Store(), counters.DefaultFlushInterval)
+	return e.countersMirror
 }
 
 // SettingsService returns the global guardrails settings service.
@@ -427,6 +462,15 @@ func (e *App) Start(ctx context.Context) error {
 	go e.SettingsService().RunRefresh(refreshCtx, e.cfg.Guardrails.SettingsRefreshInterval)
 	go e.RulesReloader().RunRefresh(refreshCtx, e.cfg.Guardrails.RulesRefreshInterval)
 
+	// Mirror the monotonic counters into the shared store so /v1/metrics/summary
+	// agrees across replicas. Started with the refresh tickers: it is background
+	// telemetry, never on the data path.
+	if mirror := e.CountersMirror(); mirror != nil {
+		logging.Info(ctx, "Distributed masking counters enabled",
+			"summary_source", e.cfg.Metrics.SummarySource, "store_backend", e.cfg.Store.Backend)
+		go mirror.Run(refreshCtx)
+	}
+
 	e.stop = func() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -464,6 +508,12 @@ func (e *App) Start(ctx context.Context) error {
 		// (detached) writes are not lost. Bounded by shutdownCtx.
 		if e.auditRecorder != nil {
 			e.auditRecorder.Drain(shutdownCtx)
+		}
+
+		// Persist the counter deltas the mirror is still holding; the store
+		// closes right after, so a skipped flush would lose them silently.
+		if e.countersMirror != nil {
+			e.countersMirror.Flush(shutdownCtx)
 		}
 
 		var storeErr error

@@ -46,6 +46,7 @@ flowchart LR
 | `unknown_format_passthrough_total` | counter | тела/SSE-стримы ответа, пропущенные без демаскирования из-за неизвестного формата API в masking state (fail-open) |
 | `unsupported_body_schema_total` | counter | тела запроса, пропущенные без маскирования из-за нераспознанной схемы (fail-open); ненулевой темп обычно значит, что путь в `GUARDRAILS_PATHS` привязан к неверному формату |
 | `unguarded_path_passthrough_total` | counter | запросы, проксированные на upstream без маскирования, потому что путь не совпал ни с одним охраняемым путём LLM |
+| `counter_mirror_dropped_total` | counter | серии распределённых счётчиков, отброшенные из-за переполнения буфера. Ненулевое значение значит, что общий стор недоступен или сильно медленнее трафика; буфер копит дельты до записи (см. `GUARDRAILS_METRICS_SUMMARY_SOURCE`) |
 
 Плюс стандартные серверные gRPC-метрики из `go-grpc-prometheus` (management API :9000).
 Пошаговое подключение Prometheus/Alertmanager/Grafana — в

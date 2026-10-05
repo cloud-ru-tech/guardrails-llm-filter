@@ -63,7 +63,39 @@ type Config struct {
 	API        API        `envPrefix:"API_"`
 	UI         UI         `envPrefix:"UI_"`
 	Audit      Audit      `envPrefix:"AUDIT_"`
+	Metrics    Metrics    `envPrefix:"METRICS_"`
 	Upstream   Upstream   `envPrefix:"UPSTREAM_"`
+}
+
+// MetricsSummarySource values. See Metrics.SummarySource.
+const (
+	// MetricsSummaryAuto mirrors counters into the shared store only when the
+	// configured backend actually shares state across replicas.
+	MetricsSummaryAuto = "auto"
+	// MetricsSummaryStore forces the distributed counters, including on the
+	// in_memory backend (useful for exercising the path in a single replica).
+	MetricsSummaryStore = "store"
+	// MetricsSummaryLocal keeps the original per-replica Prometheus reading.
+	MetricsSummaryLocal = "local"
+)
+
+// Metrics tunes the metrics surface.
+type Metrics struct {
+	// SummarySource selects where GET /v1/metrics/summary reads the monotonic
+	// counters from:
+	//
+	//   - "auto"  (default) — the shared store for the redis/postgres backends,
+	//                         the local Prometheus gatherer otherwise.
+	//   - "store"           — always mirror counters into the store and read
+	//                         them back, even on in_memory.
+	//   - "local"           — never mirror; keep the per-replica reading.
+	//
+	// On a multi-replica deployment the Prometheus counters are per-process, so
+	// the console hero number would otherwise show only the replica that served
+	// the request. Latency percentiles are always per-replica: percentiles do
+	// not aggregate by summing, and /metrics remains the canonical multi-replica
+	// source for them.
+	SummarySource string `env:"SUMMARY_SOURCE" envDefault:"auto"`
 }
 
 // Upstream configures the LLM provider this service forwards masked requests
@@ -305,6 +337,15 @@ func Load() (*Config, error) {
 	// built-in default; reject anything below it at boot.
 	if cfg.Guardrails.MaskParallelMinBytes < 0 {
 		return nil, fmt.Errorf("%sMASK_PARALLEL_MIN_BYTES must be >= 0, got %d", EnvPrefix, cfg.Guardrails.MaskParallelMinBytes)
+	}
+	// The summary source is a small enum; a typo must fail boot rather than
+	// silently fall back to "auto", which on a multi-replica deployment is
+	// exactly the misconfiguration the operator was trying to pin down.
+	switch cfg.Metrics.SummarySource {
+	case MetricsSummaryAuto, MetricsSummaryStore, MetricsSummaryLocal:
+	default:
+		return nil, fmt.Errorf("%sMETRICS_SUMMARY_SOURCE must be one of %q, %q, %q; got %q",
+			EnvPrefix, MetricsSummaryAuto, MetricsSummaryStore, MetricsSummaryLocal, cfg.Metrics.SummarySource)
 	}
 	// Header lookups are case-insensitive (net/http canonicalizes header
 	// names). Normalize the configured override header name so a mixed-case

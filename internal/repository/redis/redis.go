@@ -9,6 +9,7 @@
 //	guardrails:settings                STRING  JSON(models.GuardrailsSettings)
 //	guardrails:audit:rec:<request_id>  STRING  JSON(models.AuditRecord), EX = audit TTL
 //	guardrails:audit:idx               ZSET    score = Timestamp UnixMicro, member = request_id
+//	guardrails:counters:<kind>         HASH    field = label, value = lifetime count (no TTL)
 package redis
 
 import (
@@ -34,6 +35,7 @@ const (
 	settingsKey       = "guardrails:settings"
 	auditRecKeyPrefix = "guardrails:audit:rec:"
 	auditIdxKey       = "guardrails:audit:idx"
+	countersKeyPrefix = "guardrails:counters:"
 
 	// auditListMaxRounds bounds the index scan of one filtered ListAuditRecords
 	// call: filters are applied client-side, so a highly selective query over a
@@ -445,6 +447,71 @@ func (s *Store) SaveSettingsIfAbsent(ctx context.Context, gs models.GuardrailsSe
 		return false, fmt.Errorf("redis save settings if absent: %w", err)
 	}
 	return true, nil
+}
+
+// countersKey is the per-family HASH holding label → lifetime count. Fields are
+// labels, so a label containing ':' (a custom rule ID) needs no escaping and
+// cannot be confused with a key separator.
+func countersKey(kind repository.CounterKind) string { return countersKeyPrefix + string(kind) }
+
+// IncrCounters applies the whole batch in one pipeline: HINCRBY is atomic per
+// field, so two replicas incrementing the same series never lose an update.
+// Only the closed repository.CounterKinds set is written, which keeps the key
+// space bounded; an unknown kind in deltas is ignored rather than materializing
+// a key that ReadCounters would never read back.
+func (s *Store) IncrCounters(ctx context.Context, deltas repository.Counters) error {
+	pipe := s.client.Pipeline()
+	queued := 0
+	for _, kind := range repository.CounterKinds {
+		for label, delta := range deltas[kind] {
+			if delta == 0 {
+				continue
+			}
+			pipe.HIncrBy(ctx, countersKey(kind), label, delta)
+			queued++
+		}
+	}
+	if queued == 0 {
+		return nil
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("redis incr counters: %w", err)
+	}
+	return nil
+}
+
+// ReadCounters returns every persisted series. A family with no writes reads as
+// an empty map from HGETALL, so it is simply omitted from the result.
+func (s *Store) ReadCounters(ctx context.Context) (repository.Counters, error) {
+	pipe := s.client.Pipeline()
+	cmds := make(map[repository.CounterKind]*goredis.MapStringStringCmd, len(repository.CounterKinds))
+	for _, kind := range repository.CounterKinds {
+		cmds[kind] = pipe.HGetAll(ctx, countersKey(kind))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, fmt.Errorf("redis read counters: %w", err)
+	}
+
+	out := make(repository.Counters, len(repository.CounterKinds))
+	for kind, cmd := range cmds {
+		fields, err := cmd.Result()
+		if err != nil {
+			return nil, fmt.Errorf("redis read counters %q: %w", kind, err)
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		series := make(map[string]int64, len(fields))
+		for label, raw := range fields {
+			value, convErr := strconv.ParseInt(raw, 10, 64)
+			if convErr != nil {
+				return nil, fmt.Errorf("redis counter %q/%q: %w", kind, label, convErr)
+			}
+			series[label] = value
+		}
+		out[kind] = series
+	}
+	return out, nil
 }
 
 func (s *Store) Ping(ctx context.Context) error {

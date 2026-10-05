@@ -441,6 +441,67 @@ func (s *Store) SaveSettingsIfAbsent(ctx context.Context, gs models.GuardrailsSe
 	return tag.RowsAffected() > 0, nil
 }
 
+// IncrCounters applies the whole batch as one pgx batch. The upsert adds to the
+// stored value rather than replacing it, so concurrent replicas cannot lose an
+// increment. Only the closed repository.CounterKinds set is written; an unknown
+// kind in deltas is ignored instead of inserting a row no reader looks at.
+func (s *Store) IncrCounters(ctx context.Context, deltas repository.Counters) error {
+	batch := &pgx.Batch{}
+	queued := 0
+	for _, kind := range repository.CounterKinds {
+		for label, delta := range deltas[kind] {
+			if delta == 0 {
+				continue
+			}
+			batch.Queue(`
+				INSERT INTO guardrails_counters (kind, label, value)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (kind, label)
+				DO UPDATE SET value = guardrails_counters.value + EXCLUDED.value`,
+				string(kind), label, delta)
+			queued++
+		}
+	}
+	if queued == 0 {
+		return nil
+	}
+	results := s.pool.SendBatch(ctx, batch)
+	defer func() { _ = results.Close() }()
+	for range queued {
+		if _, err := results.Exec(); err != nil {
+			return fmt.Errorf("postgres incr counters: %w", err)
+		}
+	}
+	return nil
+}
+
+// ReadCounters returns every persisted series; a family with no rows is omitted.
+func (s *Store) ReadCounters(ctx context.Context) (repository.Counters, error) {
+	rows, err := s.pool.Query(ctx, `SELECT kind, label, value FROM guardrails_counters`)
+	if err != nil {
+		return nil, fmt.Errorf("postgres read counters: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(repository.Counters, len(repository.CounterKinds))
+	for rows.Next() {
+		var kind, label string
+		var value int64
+		if err := rows.Scan(&kind, &label, &value); err != nil {
+			return nil, fmt.Errorf("postgres scan counter: %w", err)
+		}
+		k := repository.CounterKind(kind)
+		if out[k] == nil {
+			out[k] = make(map[string]int64)
+		}
+		out[k][label] = value
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres read counters: %w", err)
+	}
+	return out, nil
+}
+
 func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
