@@ -161,3 +161,55 @@ func TestLoadUpstreamInvalidPathOverrideFailsBoot(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GUARDRAILS_UPSTREAM_PATH_BASE_URLS")
 }
+
+func TestEngineAndDataPlaneDefaults(t *testing.T) {
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.DataPlaneEnabled, "the data plane stays on unless switched off")
+	assert.Empty(t, cfg.Engine.Addr, "the engine API is opt-in")
+	assert.False(t, cfg.API.IgnoreUnknownFields, "strict field parsing is the default")
+}
+
+func TestEngineAddrWithToken(t *testing.T) {
+	t.Setenv("GUARDRAILS_ENGINE_API_ADDR", ":9100")
+	t.Setenv("GUARDRAILS_ENGINE_API_TOKEN", "tok")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, ":9100", cfg.Engine.Addr)
+	assert.Equal(t, "tok", cfg.Engine.Token)
+}
+
+func TestEngineAddrWithoutTokenFails(t *testing.T) {
+	// /v1/unmask hands back original sensitive values, so an engine listener
+	// without a token must not start at all.
+	t.Setenv("GUARDRAILS_ENGINE_API_ADDR", ":9100")
+
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GUARDRAILS_ENGINE_API_TOKEN")
+}
+
+func TestDataPlaneDisabledNeedsAnotherSurface(t *testing.T) {
+	t.Setenv("GUARDRAILS_DATA_PLANE_ENABLED", "false")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.DataPlaneEnabled)
+	// The data plane can be off while the engine API is on: that is exactly the
+	// component deployment this switch exists for, and it needs no upstream.
+	t.Setenv("GUARDRAILS_ENGINE_API_ADDR", ":9100")
+	t.Setenv("GUARDRAILS_ENGINE_API_TOKEN", "tok")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Upstream.BaseURL)
+}
+
+func TestAPIIgnoreUnknownFields(t *testing.T) {
+	t.Setenv("GUARDRAILS_API_IGNORE_UNKNOWN_FIELDS", "true")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.API.IgnoreUnknownFields)
+}

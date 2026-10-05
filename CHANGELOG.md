@@ -40,6 +40,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (mask/pass — never block) forwards them instead, and this counter is the
   operator's signal that the gateway receives traffic on paths beyond
   `GUARDRAILS_PATHS`.
+- **Engine API** (`GUARDRAILS_ENGINE_API_ADDR` + `GUARDRAILS_ENGINE_API_TOKEN`,
+  off by default): a separate, bearer-authenticated listener that exposes the
+  masking engine as a component — `POST /v1/mask` returns the masked texts and
+  their placeholders under a caller-supplied `correlation_id`, and
+  `POST /v1/unmask` restores the originals for that id. Built for a caller that
+  already owns a gateway: it never has to hand its text to a second proxy (and
+  so lose sight of it, or land unmasked data in its own logs), and needs no
+  per-upstream instance. State reuses `GUARDRAILS_STORE_BACKEND` /
+  `GUARDRAILS_STORE_MASKING_TTL`, including at-rest encryption; the mask
+  response never carries originals, and a state write that fails returns 503
+  instead of handing back text that could never be unmasked. The contract is
+  versioned and documented in `docs/api/engine.md`, separate from the console's
+  internals.
+- `GUARDRAILS_DATA_PLANE_ENABLED` (default true): `false` starts no gateway
+  listener and drops the `GUARDRAILS_UPSTREAM_BASE_URL` requirement, so the
+  service can run purely as an engine.
+- `GUARDRAILS_API_IGNORE_UNKNOWN_FIELDS` (default false): makes the management
+  REST facade tolerate unknown fields instead of rejecting them with 400.
 
 ### Changed
 

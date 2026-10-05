@@ -26,7 +26,6 @@ import (
 	"github.com/cloud-ru-tech/guardrails-llm-filter/frontend"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/controller/api"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/logging"
-	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/models"
 	scanuc "github.com/cloud-ru-tech/guardrails-llm-filter/internal/usecases/guardrails/scan"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/version"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/tlsutils"
@@ -54,12 +53,8 @@ func (e *App) GrpcController(ctx context.Context) *api.Controller {
 	rulesUC := e.RulesUseCase()
 
 	// Default scan scope: every declared data-type group plus CUSTOM, so a bare
-	// scan exercises the whole ruleset.
-	scanDataTypes := make([]models.DataType, 0, len(e.DataTypes())+1)
-	for _, dt := range e.DataTypes() {
-		scanDataTypes = append(scanDataTypes, models.DataType(dt.DataType)) //nolint:gosec // data-type IDs are small
-	}
-	scanDataTypes = append(scanDataTypes, models.DataTypeCUSTOM)
+	// scan exercises the whole ruleset. Shared with the engine API's /v1/mask.
+	scanDataTypes := e.defaultScanDataTypes()
 	scanUC := scanuc.New(scanuc.Deps{
 		Production:       e.MaskUseCase(),
 		FileRules:        e.loadFileRules(),
@@ -168,9 +163,13 @@ func (e *App) APIServer(ctx context.Context) *http.Server {
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
 			// UseProtoNames keeps snake_case field names and UseEnumNumbers keeps
-			// data_type as numbers on the wire.
-			MarshalOptions:   protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true},
-			UnmarshalOptions: protojson.UnmarshalOptions{},
+			// data_type as numbers on the wire. DiscardUnknown is opt-in
+			// (GUARDRAILS_API_IGNORE_UNKNOWN_FIELDS): by default an unknown field
+			// is a 400, so a client typo fails loudly instead of being dropped.
+			MarshalOptions: protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true, EmitUnpopulated: true},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: e.cfg.API.IgnoreUnknownFields,
+			},
 		}),
 	)
 

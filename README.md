@@ -275,6 +275,10 @@ alexen2/alrosait нет.</sub>
 | `GUARDRAILS_METRICS_PORT` | `9090` | порт метрик Prometheus |
 | `GUARDRAILS_GRPC_ADDR` | `:9000` | management gRPC-адрес (`GuardrailsApi`); REST-API проксирует на него |
 | `GUARDRAILS_GRPC_SECURE` | `false` | self-signed TLS на management gRPC-listener; по умолчанию выкл (API рассчитан на работу внутри кластера) |
+| `GUARDRAILS_ENGINE_API_ADDR` | — | адрес engine-only API (`/v1/mask`, `/v1/unmask`); пусто отключает. Стабильный контракт — [docs/api/engine.md](docs/api/engine.md) |
+| `GUARDRAILS_ENGINE_API_TOKEN` | — | bearer-токен engine API; **обязателен**, если задан адрес (`/v1/unmask` возвращает оригиналы) |
+| `GUARDRAILS_DATA_PLANE_ENABLED` | `true` | `false` не поднимает data-plane gateway и снимает требование `GUARDRAILS_UPSTREAM_BASE_URL` |
+| `GUARDRAILS_API_IGNORE_UNKNOWN_FIELDS` | `false` | `true` — REST management API игнорирует незнакомые поля вместо 400 |
 | `GUARDRAILS_ENABLED` | `true` | глобальный вкл/выкл (seed-значение) |
 | `GUARDRAILS_MODE` | `enforce` | `detect` = shadow-режим: скан + метрики/аудит, трафик не тронут (seed) |
 | `GUARDRAILS_DATA_TYPES` | `1,2,3,4,5,6` | включённые типы данных, числа или имена (`6`/CUSTOM включает кастомные правила из API) |
