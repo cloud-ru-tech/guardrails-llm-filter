@@ -1870,6 +1870,16 @@ func TestFioRuFormats(t *testing.T) {
 		{"prepositional-female", "сведения о Павловой Ольге Сергеевне уточнены", "Павловой Ольге Сергеевне"},
 		{"all-caps", "СМИРНОВА АННА СЕРГЕЕВНА — посетитель", "СМИРНОВА АННА СЕРГЕЕВНА"},
 		{"all-caps-male", "пропуск: ИВАНОВ ИВАН ИВАНОВИЧ, стол 3", "ИВАНОВ ИВАН ИВАНОВИЧ"},
+		// Issue #35: the comma-inverted "Фамилия, Имя Отчество" order used in
+		// documents. The pre-comma word must look like a surname, so an address
+		// word before the comma does not drag the greeting into the match.
+		{"comma-inverted", "Ответственный: Смирнов, Пётр Ильич", "Смирнов, Пётр Ильич"},
+		{"comma-inverted-female", "Ковалёва, Анна Сергеевна — отдел кадров", "Ковалёва, Анна Сергеевна"},
+		{"comma-inverted-all-caps", "подпись: СМИРНОВ, ИВАН ПЕТРОВИЧ", "СМИРНОВ, ИВАН ПЕТРОВИЧ"},
+		// Issue #35: a hyphenated compound name is ONE name, in either the
+		// first-name or the surname slot.
+		{"hyphenated-name-middle", "заявитель Смирнова Анна-Мария Сергеевна принята", "Смирнова Анна-Мария Сергеевна"},
+		{"hyphenated-name-first", "пропуск для Анна-Мария Смирнова Сергеевна", "Анна-Мария Смирнова Сергеевна"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -1886,6 +1896,10 @@ func TestFioRuFormats(t *testing.T) {
 	assertNoMatch(t, scanner, "pii.fio-ru", "Заявка На Пропуск оформлена")
 	assertNoMatch(t, scanner, "pii.fio-ru", "ООО РОГА И КОПЫТА открыло филиал")
 	assertNoMatch(t, scanner, "pii.fio-ru", "СРОЧНО ОФОРМИТЬ ПРОПУСК сегодня")
+	// A greeting is not a surname, so the comma-inverted branch must not fire on
+	// it (the two-word «Анна Сергеевна» is pii.fio-ru.short's business).
+	assertNoMatch(t, scanner, "pii.fio-ru", "Здравствуйте, Анна Сергеевна, проходите")
+	assertNoMatch(t, scanner, "pii.fio-ru", "Добрый день, Мария Ивановна, рады видеть")
 }
 
 // TestFioInitialsFormats: surname + initials in both orders, lowercase and
@@ -1936,6 +1950,11 @@ func TestFioShortFormats(t *testing.T) {
 		{"adjectival-surname-decl", "заявитель Достоевская Анна пришла", "Достоевская Анна"},
 		{"ko-surname", "звонил Иван Шевченко вчера", "Иван Шевченко"},
 		{"name-patronymic", "Здравствуйте, Анна Сергеевна, проходите", "Анна Сергеевна"},
+		// Issue #35: the dictionary anchor must span a hyphenated compound name
+		// instead of restarting at its second half and leaving the first in the
+		// clear ("Анна-" was the reported leak).
+		{"hyphenated-name-surname-last", "отзыв оставила Анна-Мария Ковалёва вчера", "Анна-Мария Ковалёва"},
+		{"hyphenated-name-surname-first", "на связи Ковалёва Анна-Мария сегодня", "Ковалёва Анна-Мария"},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {

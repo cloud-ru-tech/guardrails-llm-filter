@@ -107,6 +107,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `sequence_number`, which strict SDKs require.
 - Unknown/empty response format now passes the body through unchanged instead of
   rewriting it into an empty chat-completions skeleton.
+- ФИО detection no longer partially masks two forms that looked protected but
+  left part of the name in the clear: a hyphenated compound given name
+  (`Анна-Мария Ковалёва` used to mask only `Мария Ковалёва`, leaving `Анна-`)
+  and the comma-inverted document order (`Смирнов, Пётр Ильич` used to mask only
+  `Пётр Ильич`). The comma form requires a surname-looking word before the
+  comma, so `Здравствуйте, Анна Сергеевна` is not treated as a surname.
+  Hyphenated given names are also handled in the patronymic-anchored rule
+  (`Смирнова Анна-Мария Сергеевна`). The remaining recall gaps (non-dictionary
+  and foreign names, surname without a given name, initials without dots) are
+  unchanged and now listed explicitly as known limitations in
+  `docs/rules-engine/README.md`.
 - chat/completions SSE frames are serialized without HTML-escaping `<`, `>`,
   `&`, matching the other dialects and preserving placeholder markers.
 
