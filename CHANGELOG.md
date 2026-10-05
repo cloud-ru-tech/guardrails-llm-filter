@@ -41,6 +41,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   operator's signal that the gateway receives traffic on paths beyond
   `GUARDRAILS_PATHS`.
 
+- `GUARDRAILS_GRPC_MAX_MESSAGE_BYTES` bounds a single management-API gRPC
+  message on both the gRPC server (receive and send) and the grpc-gateway's own
+  client hop, lifting grpc-go's built-in 4 MiB receive limit — the one a large
+  `ListAuditRecords` page or `Scan` response exceeds, failing with
+  `ResourceExhausted`. `0` (default) keeps grpc-go's built-in limits, so
+  existing deployments are unaffected.
+
 ### Changed
 
 - The data path is now standalone HTTP instead of an Envoy `ext_proc` gRPC

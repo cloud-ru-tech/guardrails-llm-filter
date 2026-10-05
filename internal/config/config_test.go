@@ -161,3 +161,26 @@ func TestLoadUpstreamInvalidPathOverrideFailsBoot(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GUARDRAILS_UPSTREAM_PATH_BASE_URLS")
 }
+
+func TestLoadGrpcMaxMessageBytes(t *testing.T) {
+	// The zero default keeps grpc-go's built-in limits, so an existing
+	// deployment sees no change until it opts in.
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 0, cfg.GRPCMaxMessageBytes)
+
+	t.Setenv("GUARDRAILS_GRPC_MAX_MESSAGE_BYTES", "16777216")
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 16777216, cfg.GRPCMaxMessageBytes)
+}
+
+func TestLoadGrpcMaxMessageBytesNegative(t *testing.T) {
+	// grpc-go would silently ignore a negative bound, leaving the operator
+	// stuck on the 4 MiB default with no boot-time signal.
+	t.Setenv("GUARDRAILS_GRPC_MAX_MESSAGE_BYTES", "-1")
+
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GUARDRAILS_GRPC_MAX_MESSAGE_BYTES")
+}

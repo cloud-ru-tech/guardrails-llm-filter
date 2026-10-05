@@ -275,6 +275,7 @@ alexen2/alrosait нет.</sub>
 | `GUARDRAILS_METRICS_PORT` | `9090` | порт метрик Prometheus |
 | `GUARDRAILS_GRPC_ADDR` | `:9000` | management gRPC-адрес (`GuardrailsApi`); REST-API проксирует на него |
 | `GUARDRAILS_GRPC_SECURE` | `false` | self-signed TLS на management gRPC-listener; по умолчанию выкл (API рассчитан на работу внутри кластера) |
+| `GUARDRAILS_GRPC_MAX_MESSAGE_BYTES` | `0` | лимит одного gRPC-сообщения management API: приём и отправка на gRPC-сервере плюс клиентские call options grpc-gateway. `0` — встроенные лимиты grpc-go (4 MiB на приём). Поднимите, если крупный ответ `ListAuditRecords`/`Scan` падает с `ResourceExhausted` |
 | `GUARDRAILS_ENABLED` | `true` | глобальный вкл/выкл (seed-значение) |
 | `GUARDRAILS_MODE` | `enforce` | `detect` = shadow-режим: скан + метрики/аудит, трафик не тронут (seed) |
 | `GUARDRAILS_DATA_TYPES` | `1,2,3,4,5,6` | включённые типы данных, числа или имена (`6`/CUSTOM включает кастомные правила из API) |

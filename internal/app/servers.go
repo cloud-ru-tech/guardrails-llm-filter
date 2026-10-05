@@ -130,6 +130,16 @@ func (e *App) GrpcServer(ctx context.Context) *grpc.Server {
 		),
 	}
 
+	if e.cfg.GRPCMaxMessageBytes > 0 {
+		// Both directions: the receive limit is the one grpc-go defaults to
+		// 4 MiB, but a raised cap on one side only leaves the other as the
+		// bottleneck, so keep them symmetric.
+		opts = append(opts,
+			grpc.MaxRecvMsgSize(e.cfg.GRPCMaxMessageBytes),
+			grpc.MaxSendMsgSize(e.cfg.GRPCMaxMessageBytes),
+		)
+	}
+
 	if e.cfg.GrpcSecure {
 		logging.Info(ctx, "management gRPC is secure, using self-signed certificate")
 		cert, certErr := tlsutils.CreateSelfSignedTLSCertificate()
@@ -179,8 +189,20 @@ func (e *App) APIServer(ctx context.Context) *http.Server {
 		//nolint:gosec // loopback dial to our own self-signed listener
 		dialCreds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}))
 	}
+
+	// The gateway is itself a gRPC client of our listener. Without matching
+	// call options it keeps grpc-go's 4 MiB receive limit, so a management
+	// response the server is willing to send still fails the proxy hop with
+	// ResourceExhausted.
+	dialOpts := []grpc.DialOption{dialCreds}
+	if e.cfg.GRPCMaxMessageBytes > 0 {
+		dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(e.cfg.GRPCMaxMessageBytes),
+			grpc.MaxCallSendMsgSize(e.cfg.GRPCMaxMessageBytes),
+		))
+	}
 	if err := servicev1.RegisterGuardrailsApiHandlerFromEndpoint(
-		ctx, mux, dialTarget(e.cfg.GRPCAddr), []grpc.DialOption{dialCreds},
+		ctx, mux, dialTarget(e.cfg.GRPCAddr), dialOpts,
 	); err != nil {
 		panic(fmt.Errorf("register management gateway: %w", err))
 	}

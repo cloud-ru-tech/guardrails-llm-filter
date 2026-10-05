@@ -55,6 +55,20 @@ type Config struct {
 	// run cluster-internal behind a network boundary.
 	GrpcSecure bool `env:"GRPC_SECURE" envDefault:"false"`
 
+	// GRPCMaxMessageBytes bounds a single gRPC message on the management API,
+	// in both directions and on both sides of the grpc-gateway hop: the gRPC
+	// server's receive/send limit plus the gateway client's
+	// MaxCallRecvMsgSize/MaxCallSendMsgSize.
+	//
+	// grpc-go's built-in receive limit is 4 MiB. A large ListAuditRecords page
+	// or a large Scan response can exceed it, and the failure then surfaces as
+	// ResourceExhausted ("received message larger than max") even though the
+	// payload is legitimate. Raise this instead of paginating harder.
+	//
+	// 0 keeps grpc-go's built-in defaults (4 MiB receive; effectively
+	// unlimited send), so the default is byte-for-byte the previous behavior.
+	GRPCMaxMessageBytes int `env:"GRPC_MAX_MESSAGE_BYTES" envDefault:"0"`
+
 	GuardrailsRules   GuardrailsRulesCfg `envPrefix:"RULES_"`
 	GuardrailsHeaders GuardrailsHeaders  `envPrefix:"HEADERS_"`
 
@@ -305,6 +319,12 @@ func Load() (*Config, error) {
 	// built-in default; reject anything below it at boot.
 	if cfg.Guardrails.MaskParallelMinBytes < 0 {
 		return nil, fmt.Errorf("%sMASK_PARALLEL_MIN_BYTES must be >= 0, got %d", EnvPrefix, cfg.Guardrails.MaskParallelMinBytes)
+	}
+	// Same reasoning for the gRPC message bound: a negative value is not a
+	// valid grpc-go option and would be dropped silently, so an operator who
+	// mistyped it would keep hitting the built-in 4 MiB limit with no signal.
+	if cfg.GRPCMaxMessageBytes < 0 {
+		return nil, fmt.Errorf("%sGRPC_MAX_MESSAGE_BYTES must be >= 0, got %d", EnvPrefix, cfg.GRPCMaxMessageBytes)
 	}
 	// Header lookups are case-insensitive (net/http canonicalizes header
 	// names). Normalize the configured override header name so a mixed-case
