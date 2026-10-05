@@ -39,6 +39,39 @@ func TestExtractRequestContent(t *testing.T) {
 			},
 		},
 		{
+			name: "flat function tool definition before instructions and input",
+			// The Responses API keeps a function definition flat (no nested
+			// "function" object). Tool text is extracted first so its placeholder
+			// numbers do not shift as the conversation grows.
+			body: `{"instructions":"be helpful","input":"hello","tools":[{
+				"type":"function","name":"notify","description":"Notify user@example.com",
+				"parameters":{"type":"object","properties":{
+					"to":{"type":"string","default":"user@example.com"}}}}]}`,
+			want: []llmutils.ContentField{
+				{Path: "tools.0.description", Value: "Notify user@example.com"},
+				{Path: "tools.0.parameters.properties.to.default", Value: "user@example.com"},
+				{Path: "instructions", Value: "be helpful"},
+				{Path: "input", Value: "hello"},
+			},
+		},
+		{
+			name: "hosted MCP tool: operational fields are left alone",
+			// server_url/headers are consumed by the provider to reach the MCP
+			// server; masking them breaks the tool instead of protecting it.
+			// Only the model-visible prose is scanned: `description` and the MCP
+			// tool's second description, `server_description`.
+			body: `{"input":"hi","tools":[{
+				"type":"mcp","server_label":"acme","server_url":"https://mcp.acme.internal/sse",
+				"headers":{"Authorization":"Bearer sk-acme-0123456789"},
+				"server_description":"Acme HR server, contact user@example.com",
+				"description":"Acme tools, owner user@example.com"}]}`,
+			want: []llmutils.ContentField{
+				{Path: "tools.0.description", Value: "Acme tools, owner user@example.com"},
+				{Path: "tools.0.server_description", Value: "Acme HR server, contact user@example.com"},
+				{Path: "input", Value: "hi"},
+			},
+		},
+		{
 			name: "input array with string content",
 			body: `{"input":[{"role":"user","content":"first"},{"role":"assistant","content":"second"}]}`,
 			want: []llmutils.ContentField{

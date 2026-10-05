@@ -4,7 +4,6 @@ package messages
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/tidwall/gjson"
 
@@ -15,6 +14,9 @@ import (
 // Messages API (/v1/messages) request body.
 //
 // Handles:
+//   - top-level `tools`: each definition's `description` and the text keywords of
+//     its `input_schema` (see llmutils.CollectToolDefinitionFields for what is
+//     covered and what is deliberately left alone)
 //   - top-level `system`: a string, or an array of {type:"text", text} blocks
 //   - messages[i].content: a string, or an array of blocks:
 //   - {type:"text", text}
@@ -30,6 +32,16 @@ import (
 func ExtractRequestContent(body []byte) ([]llmutils.ContentField, error) {
 	root := gjson.ParseBytes(body)
 	var fields []llmutils.ContentField
+
+	// Tool definitions come first, matching their position at the head of the
+	// prompt: their placeholder numbers then depend only on the tool block, not
+	// on how long the conversation has grown, so the masked prefix stays
+	// byte-identical across turns and prompt caching keeps hitting.
+	root.Get("tools").ForEach(func(i, tool gjson.Result) bool {
+		fields = append(fields,
+			llmutils.CollectToolDefinitionFields(tool, "tools."+i.String(), "input_schema")...)
+		return true
+	})
 
 	// Top-level system prompt: user-supplied instructions that routinely carry
 	// PII/secrets and must be masked before reaching the model.
@@ -89,7 +101,7 @@ func collectJSONStringLeaves(v gjson.Result, base string) []llmutils.ContentFiel
 	switch {
 	case v.IsObject():
 		v.ForEach(func(k, child gjson.Result) bool {
-			fields = append(fields, collectJSONStringLeaves(child, base+"."+escapePathKey(k.String()))...)
+			fields = append(fields, collectJSONStringLeaves(child, base+"."+llmutils.EscapePathKey(k.String()))...)
 			return true
 		})
 	case v.IsArray():
@@ -100,23 +112,6 @@ func collectJSONStringLeaves(v gjson.Result, base string) []llmutils.ContentFiel
 		fields = append(fields, llmutils.ContentField{Path: base, Value: v.String()})
 	}
 	return fields
-}
-
-// escapePathKey escapes gjson/sjson path metacharacters in an object key so a
-// key containing dots or wildcards addresses the intended element.
-func escapePathKey(k string) string {
-	if !strings.ContainsAny(k, `\.*?|#@`) {
-		return k
-	}
-	var b strings.Builder
-	for _, r := range k {
-		switch r {
-		case '\\', '.', '*', '?', '|', '#', '@':
-			b.WriteByte('\\')
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
 }
 
 // collectMessagesContentBlocks collects scannable fields from an Anthropic

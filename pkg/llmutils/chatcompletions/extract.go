@@ -13,6 +13,9 @@ import (
 // the real message index in the JSON array (not the index within the returned slice).
 //
 // Handles:
+//   - /v1/chat/completions: tools[i].function.description and the text keywords
+//     of tools[i].function.parameters (plus the legacy functions[i] shape); see
+//     llmutils.CollectToolDefinitionFields for what is deliberately left alone
 //   - /v1/chat/completions: messages[i].content (string)
 //   - /v1/chat/completions: messages[i].content[j].text for text content parts
 //   - /v1/chat/completions: messages[i].tool_calls[j].function.arguments
@@ -30,6 +33,12 @@ func ExtractRequestContent(body []byte) ([]llmutils.ContentField, error) {
 	}
 
 	fields := []llmutils.ContentField{}
+
+	// Tool definitions first: their placeholder numbers then depend only on the
+	// tool block and not on the conversation length, so the masked tool block a
+	// client resends every turn stays byte-identical.
+	fields = append(fields, collectToolDefinitionFields(result)...)
+
 	for i, msg := range messages.Array() {
 		basePath := "messages." + strconv.Itoa(i)
 
@@ -46,6 +55,31 @@ func ExtractRequestContent(body []byte) ([]llmutils.ContentField, error) {
 	}
 
 	return fields, nil
+}
+
+// collectToolDefinitionFields collects the scannable text of the request's tool
+// definitions: the current `tools[i].function` shape and the deprecated
+// top-level `functions[i]` shape (still accepted by OpenAI-compatible gateways,
+// and its tool call is already scanned via function_call.arguments).
+func collectToolDefinitionFields(result gjson.Result) []llmutils.ContentField {
+	var fields []llmutils.ContentField
+
+	result.Get("tools").ForEach(func(i, tool gjson.Result) bool {
+		fn := tool.Get("function")
+		if fn.IsObject() {
+			fields = append(fields, llmutils.CollectToolDefinitionFields(
+				fn, "tools."+i.String()+".function", "parameters")...)
+		}
+		return true
+	})
+
+	result.Get("functions").ForEach(func(i, fn gjson.Result) bool {
+		fields = append(fields, llmutils.CollectToolDefinitionFields(
+			fn, "functions."+i.String(), "parameters")...)
+		return true
+	})
+
+	return fields
 }
 
 func collectMessageContentFields(content gjson.Result, basePath string) []llmutils.ContentField {

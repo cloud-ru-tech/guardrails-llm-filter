@@ -15,6 +15,10 @@ import (
 // sjson-patchable paths preserving real array indices.
 //
 // Handles:
+//   - tools[i].description and the text keywords of tools[i].parameters — the
+//     Responses API keeps a function definition flat (no nested "function"
+//     object); see llmutils.CollectToolDefinitionFields for what is deliberately
+//     left alone, notably the operational fields of hosted/MCP tools
 //   - instructions (string)
 //   - input (string form)
 //   - input[i].content (string form of a message item)
@@ -41,6 +45,18 @@ func ExtractRequestContent(body []byte) ([]llmutils.ContentField, error) {
 	}
 
 	fields := []llmutils.ContentField{}
+
+	// Tool definitions first: their placeholder numbers then depend only on the
+	// tool block and not on the conversation length, so the masked tool block
+	// stays byte-identical across turns. `server_description` is the MCP tool's
+	// second model-visible description; it is listed next to `description` so the
+	// two are numbered together.
+	result.Get("tools").ForEach(func(i, tool gjson.Result) bool {
+		fields = append(fields,
+			llmutils.CollectToolDefinitionFields(tool, "tools."+i.String(), "parameters",
+				"description", "server_description")...)
+		return true
+	})
 
 	if instructions.Type == gjson.String && instructions.String() != "" {
 		fields = append(fields, llmutils.ContentField{Path: "instructions", Value: instructions.String()})

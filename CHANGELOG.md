@@ -28,6 +28,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Anthropic `/v1/messages`: the top-level `system` prompt is now masked (it was
   previously left untouched), closing a path where PII/secrets in `system`
   reached the model unmasked.
+- Tool definitions are now masked in all three formats (they were left
+  untouched): a tool's `description` and the text keywords of its schema
+  (`description`, `title`, `default`, `const`, `enum`, `examples`) in
+  `tools[i].input_schema` (Anthropic), `tools[i].function.parameters` and the
+  legacy `functions[i].parameters` (chat/completions) and `tools[i].parameters`
+  (Responses), plus the Responses MCP tool's second model-visible description
+  `server_description`. A tool definition is prompt text the model reads on every
+  turn, so
+  a default e-mail, an enum of real client names or a webhook URL with
+  credentials used to reach the provider unmasked — and did so on every request
+  of a conversation. Left alone by design: `name` (echoed back in
+  tool_use.name / tool_calls[].function.name, which are not demasked — masking it
+  would break tool calling), the operational fields of hosted/MCP tools
+  (`server_url`, `headers`, `user_location`, ...) which the provider consumes to
+  perform the call, and machine-facing schema keywords (`type`, `format`,
+  `pattern`, `required`). Tool text is extracted before `system`/`instructions`
+  and the conversation, so its placeholder numbers do not shift as the
+  conversation grows and the masked tool block a client resends every turn stays
+  byte-identical (prompt caching keeps hitting).
 - Custom-rule limits: `GUARDRAILS_RULES_MAX_CUSTOM` (default 500) and
   `GUARDRAILS_RULES_MAX_PATTERN_LEN` (default 4096) bound how many custom rules
   and how large a regex the configuration API accepts, protecting the request
