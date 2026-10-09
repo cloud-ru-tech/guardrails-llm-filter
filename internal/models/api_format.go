@@ -19,6 +19,10 @@ const (
 	APIFormatMessages APIFormat = "messages"
 	// APIFormatResponses is the OpenAI /v1/responses format.
 	APIFormatResponses APIFormat = "responses"
+	// APIFormatDecisions is the Decisions API format (TypeSafe Jev,
+	// OpenRouter /api/alpha/decisions). One-way: the request is masked, the
+	// response carries scores and flags and is relayed unchanged.
+	APIFormatDecisions APIFormat = "decisions"
 )
 
 // apiFormats lists every known format; keep in sync with the constants.
@@ -26,6 +30,14 @@ var apiFormats = []APIFormat{
 	APIFormatChatCompletions,
 	APIFormatMessages,
 	APIFormatResponses,
+	APIFormatDecisions,
+}
+
+// DemasksResponse reports whether the response of this format can hold
+// placeholders to restore. A one-way format never does, so no demasker is
+// built for its response.
+func (f APIFormat) DemasksResponse() bool {
+	return f != APIFormatDecisions
 }
 
 // ParseAPIFormat parses a format name case-insensitively.

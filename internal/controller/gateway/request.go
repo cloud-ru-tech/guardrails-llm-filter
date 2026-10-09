@@ -16,6 +16,7 @@ import (
 	"github.com/cloud-ru-tech/guardrails-llm-filter/internal/usecases/guardrails/mask"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/llmutils"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/llmutils/chatcompletions"
+	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/llmutils/decisions"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/llmutils/messages"
 	"github.com/cloud-ru-tech/guardrails-llm-filter/pkg/llmutils/responses"
 )
@@ -70,6 +71,8 @@ func (h *Handler) maskRequest(
 		fields, err = responses.ExtractRequestContent(body)
 	case models.APIFormatMessages:
 		fields, err = messages.ExtractRequestContent(body)
+	case models.APIFormatDecisions:
+		fields, err = decisions.ExtractRequestContent(body)
 	default:
 		fields, err = chatcompletions.ExtractRequestContent(body)
 	}

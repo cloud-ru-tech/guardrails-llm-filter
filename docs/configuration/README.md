@@ -60,7 +60,7 @@ env-дефолтах (кастомные правила — только фай�
 | `GUARDRAILS_DATA_TYPES` | `1,2,3,4,5,6` | включённые типы данных, числа или имена; `6`/CUSTOM включает кастомные правила из API — без него они молча не сканируются |
 | `GUARDRAILS_KEYWORD_PREFILTER_ENABLED` | `false` | сохраняющий полноту keyword-пре-фильтр (ускоряет скан) — см. [../rules-engine/](../rules-engine/) |
 | `GUARDRAILS_MASK_PARALLEL_MIN_BYTES` | `8192` | суммарный размер текстов (байты), с которого скан распараллеливается по полям (нужно ≥2 поля); `0` — встроенное значение; отрицательное — отказ старта |
-| `GUARDRAILS_PATHS` | 3 стандартных пути | пары `path:format` (`chat_completions`, `messages`, `responses`); суффиксный матчинг, подмешиваются поверх дефолтов |
+| `GUARDRAILS_PATHS` | 3 стандартных пути | пары `path:format` (`chat_completions`, `messages`, `responses`, `decisions`); суффиксный матчинг, подмешиваются поверх дефолтов |
 | `GUARDRAILS_OVERRIDE_HEADER` | `x-guardrails-data-types` | per-request заголовок сужения (потребляется, не форвардится); пусто отключает |
 | `GUARDRAILS_SETTINGS_REFRESH_INTERVAL` | `30s` | интервал перечитывания настроек (сходимость реплик); `0` отключает |
 | `GUARDRAILS_RULES_REFRESH_INTERVAL` | `30s` | интервал перечитывания кастомных правил; `0` отключает |
@@ -93,11 +93,15 @@ env-дефолтах (кастомные правила — только фай�
 По умолчанию: `/v1/chat/completions:chat_completions,/v1/messages:messages,/v1/responses:responses`.
 
 - Синтаксис значения: пары `path:format` через запятую. Допустимые форматы:
-  `chat_completions`, `messages`, `responses`. Путь не может содержать литеральный `:`.
+  `chat_completions`, `messages`, `responses`, `decisions`. Путь не может содержать литеральный `:`.
 - Матчинг (`models.PathResolver`): query-строка отбрасывается, затем точное совпадение,
   затем самый **длинный** сконфигурированный ключ, являющийся суффиксом пути. Ключи должны
   начинаться с `/`, что якорит суффиксный матч на границе сегмента: `/openai/v1/messages`
   совпадает с ключом `/v1/messages`, а `/xv1/messages` и `/v1/messages/foo` — нет.
+- Формат `decisions` — односторонний (Decisions API: TypeSafe Jev, OpenRouter `/api/alpha/decisions`):
+  маскируются все строки в `state` и `questions.*.instructions`, ответ возвращается клиенту
+  без изменений и без демаскировки. Путь по умолчанию не задан; одна пара
+  `GUARDRAILS_PATHS=/decisions:decisions` покрывает `/v1/decisions` и `/api/alpha/decisions`.
 - Сконфигурированные записи **подмешиваются поверх карты по умолчанию** (запись
   пользователя для того же пути побеждает), поэтому ключевые эндпоинты остаются под
   защитой даже при частичном `GUARDRAILS_PATHS`.

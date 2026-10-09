@@ -12,7 +12,7 @@ import (
 func TestParseAPIFormat(t *testing.T) {
 	t.Parallel()
 
-	for _, valid := range []string{"chat_completions", "MESSAGES", " messages ", "Responses"} {
+	for _, valid := range []string{"chat_completions", "MESSAGES", " messages ", "Responses", "decisions"} {
 		_, err := models.ParseAPIFormat(valid)
 		assert.NoError(t, err, valid)
 	}
@@ -99,4 +99,28 @@ func TestPathResolverLongestSuffixWins(t *testing.T) {
 	got, ok = r.Resolve("/api/completions")
 	require.True(t, ok)
 	assert.Equal(t, models.APIFormatMessages, got)
+}
+
+func TestDecisionsSuffixCoversBothVendorPaths(t *testing.T) {
+	t.Parallel()
+	// One GUARDRAILS_PATHS pair serves TypeSafe (/v1/decisions) and OpenRouter
+	// (/api/alpha/decisions); the leading slash anchors it to a path segment.
+	r, err := models.NewPathResolver(map[string]string{"/decisions": "decisions"})
+	require.NoError(t, err)
+
+	for _, path := range []string{"/decisions", "/v1/decisions", "/api/alpha/decisions", "/v1/decisions?x=1"} {
+		got, ok := r.Resolve(path)
+		assert.True(t, ok, path)
+		assert.Equal(t, models.APIFormatDecisions, got, path)
+	}
+	_, ok := r.Resolve("/v1/xdecisions")
+	assert.False(t, ok, "suffix must be segment-anchored")
+}
+
+func TestDecisionsIsOneWay(t *testing.T) {
+	t.Parallel()
+	assert.False(t, models.APIFormatDecisions.DemasksResponse())
+	for _, f := range []models.APIFormat{models.APIFormatChatCompletions, models.APIFormatMessages, models.APIFormatResponses} {
+		assert.True(t, f.DemasksResponse(), string(f))
+	}
 }
