@@ -173,20 +173,30 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	outBody := body
 	var factory *demask.Factory // non-nil ⇒ demask the response
 	var requestID string        // keys the audit record for response-phase enrichment
+	var maskDuration time.Duration
+	measurePipeline := maskable && len(body) > 0
 
 	switch {
-	case maskable && len(body) > 0:
+	case measurePipeline:
+		startedAt := time.Now()
 		masked, state, rid, demaskResp := h.maskRequest(ctx, r, body, format, eff, streamRequested)
 		if demaskResp {
 			outBody = masked
 			requestID = rid
 			factory = h.demaskerProvider.NewFactory(state)
 		}
+		maskDuration = time.Since(startedAt)
+		metrics.ObserveMaskDuration(maskDuration)
 	case !guarded:
 		metrics.IncUnguardedPathPassthrough()
 	}
 
-	h.forward(ctx, w, r, outBody, factory, format, streamRequested, requestID)
+	demaskDuration := h.forward(ctx, w, r, outBody, factory, format, streamRequested, requestID)
+	if measurePipeline {
+		// Sum processing phases: upstream waits and client I/O are not
+		// guardrails overhead, especially for long-lived SSE responses.
+		metrics.ObservePipelineDuration(maskDuration + demaskDuration)
+	}
 }
 
 // effectiveSettings resolves the global policy, optionally narrowed by the

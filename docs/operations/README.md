@@ -47,6 +47,15 @@ flowchart LR
 | `unsupported_body_schema_total` | counter | тела запроса, пропущенные без маскирования из-за нераспознанной схемы (fail-open); ненулевой темп обычно значит, что путь в `GUARDRAILS_PATHS` привязан к неверному формату |
 | `unguarded_path_passthrough_total` | counter | запросы, проксированные на upstream без маскирования, потому что путь не совпал ни с одним охраняемым путём LLM |
 
+`mask_duration_seconds` и `pipeline_duration_seconds` записываются для каждой
+попытки обработки непустого запроса на охраняемом пути при включённой защите:
+включая `detect`, отсутствие находок и fail-open ошибки. Pipeline — сумма времени
+обработки запроса и ответа, без чтения запроса клиента, ожидания upstream и
+записи ответа клиенту. Для SSE учитывается сумма времени обработки чанков,
+включая финальный вызов процессора на EOF; для `detect` и запросов без замен
+фаза демаскирования отсутствует. `demask_duration_seconds` записывается только
+для полных non-SSE ответов, `sse_chunk_demask_duration_seconds` — для SSE.
+
 Плюс стандартные серверные gRPC-метрики из `go-grpc-prometheus` (management API :9000).
 Пошаговое подключение Prometheus/Alertmanager/Grafana — в
 [../monitoring/README.md](../monitoring/README.md).

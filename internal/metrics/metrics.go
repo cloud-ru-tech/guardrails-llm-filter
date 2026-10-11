@@ -24,7 +24,7 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: namespace,
 			Name:      "pipeline_duration_seconds",
-			Help:      "Total time spent in the guardrails pipeline for one request.",
+			Help:      "Sum of request masking and response demasking processing time for one guarded request, excluding upstream and client I/O.",
 			Buckets:   latencyBuckets,
 		},
 	)
@@ -206,7 +206,9 @@ var (
 	)
 )
 
-// ObservePipelineDuration records total guardrails pipeline duration.
+// ObservePipelineDuration records mask + demask processing time for one guarded
+// request, excluding upstream and client I/O. For SSE, demask is the sum of
+// chunk processing durations; in detect mode or without findings it is zero.
 func ObservePipelineDuration(duration time.Duration) {
 	pipelineDuration.Observe(duration.Seconds())
 }
