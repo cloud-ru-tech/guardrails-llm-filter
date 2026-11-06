@@ -179,8 +179,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		masked, state, rid, demaskResp := h.maskRequest(ctx, r, body, format, eff, streamRequested)
 		if demaskResp {
 			outBody = masked
-			requestID = rid
-			factory = h.demaskerProvider.NewFactory(state)
+			// A one-way format (decisions) sends the masked body but builds no
+			// factory: the response is relayed verbatim.
+			if format.DemasksResponse() {
+				requestID = rid
+				factory = h.demaskerProvider.NewFactory(state)
+			}
 		}
 	case !guarded:
 		metrics.IncUnguardedPathPassthrough()

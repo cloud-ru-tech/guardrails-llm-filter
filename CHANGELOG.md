@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`decisions` body format** for Decisions API callers (TypeSafe Jev, OpenRouter
+  `/api/alpha/decisions`), enabled with a `GUARDRAILS_PATHS` pair such as
+  `/decisions:decisions`. Every string under `state` and each
+  `questions.*.instructions` is masked; the response is relayed unchanged, with no
+  demasking (a Decisions answer carries scores and flags, not source text).
 - **Standalone HTTP data plane**: guardrails-llm-filter now runs as a standalone service
   that clients call directly (`GUARDRAILS_LISTEN_ADDR`, default `:8080`). It
   masks the request, forwards it to the configured upstream LLM provider itself,
