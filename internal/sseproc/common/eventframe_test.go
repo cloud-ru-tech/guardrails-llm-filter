@@ -34,6 +34,17 @@ func TestClassifyFrame(t *testing.T) {
 			wantPayload: `{"a":1}`,
 		},
 		{
+			// SSE-legal frame without the space after "event:" (and "data:") —
+			// emitted by Anthropic-compatible backends such as Moonshot Kimi
+			// (`event:content_block_delta`). Must preserve the event name so
+			// rebuilt delta frames do not emit an empty `event: ` header.
+			name:        "event and data lines without space",
+			frame:       "event:content_block_delta\ndata:{\"a\":1}\n\n",
+			wantKind:    FrameEvent,
+			wantEvent:   "content_block_delta",
+			wantPayload: `{"a":1}`,
+		},
+		{
 			name:     "done sentinel with space",
 			frame:    "data: [DONE]\n\n",
 			wantKind: FrameDone,

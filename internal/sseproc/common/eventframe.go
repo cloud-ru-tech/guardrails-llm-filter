@@ -9,13 +9,16 @@ var (
 	EventPrefix  = []byte("event: ")
 	DoneSentinel = []byte("[DONE]")
 
-	// dataLinePrefix matches a "data:" field line without assuming the leading
-	// space. Per the SSE spec the single space after the colon is optional and
-	// stripped, so `data:{...}` (emitted by some OpenAI-compatible backends) is
-	// as valid as `data: {...}`. Classification matches this bare prefix and
-	// trims one optional space; BuildEventFrame still emits canonical DataPrefix.
-	dataLinePrefix = []byte("data:")
-	dataLineSpace  = []byte(" ")
+	// eventLinePrefix and dataLinePrefix match "event:" and "data:" field lines
+	// without assuming the leading space. Per the SSE spec the single space
+	// after the colon is optional and stripped, so `event:content_block_delta`
+	// and `data:{...}` (emitted by some OpenAI/Anthropic-compatible backends
+	// such as Kimi) are as valid as `event: ...` / `data: {...}`.
+	// Classification matches these bare prefixes and trims one optional space;
+	// BuildEventFrame still emits canonical EventPrefix and DataPrefix.
+	eventLinePrefix = []byte("event:")
+	dataLinePrefix  = []byte("data:")
+	dataLineSpace   = []byte(" ")
 )
 
 // FrameKind classifies a single named-event SSE frame.
@@ -70,8 +73,9 @@ func ClassifyFrame(frame []byte) ParsedFrame {
 		}
 
 		switch {
-		case bytes.HasPrefix(trimmed, EventPrefix):
-			eventName = trimmed[len(EventPrefix):]
+		case bytes.HasPrefix(trimmed, eventLinePrefix):
+			// SSE spec: strip a single optional leading space after "event:".
+			eventName = bytes.TrimPrefix(trimmed[len(eventLinePrefix):], dataLineSpace)
 		case bytes.HasPrefix(trimmed, dataLinePrefix):
 			// SSE spec: strip a single optional leading space after "data:".
 			payload := bytes.TrimPrefix(trimmed[len(dataLinePrefix):], dataLineSpace)
